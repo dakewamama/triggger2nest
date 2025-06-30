@@ -1,44 +1,30 @@
-import { IsString, IsNotEmpty, IsNumber, Min, IsOptional } from 'class-validator';
+import { IsOptional, IsNumber, IsString } from 'class-validator';
 
-/**
- * DTO for creating a new token.
- */
 export class CreateTokenDto {
+  [x: string]: any;
   @IsString()
-  @IsNotEmpty()
-  name: string;
+  readonly name: string;
 
   @IsString()
-  @IsNotEmpty()
-  symbol: string;
+  readonly symbol: string;
 
-  @IsString()
-  @IsNotEmpty()
-  description: string;
+  @IsOptional()
+  @IsNumber()
+  readonly buyAmountSol?: number;
 }
 
-/**
- * DTO for buying tokens.
- */
 export class BuyTokenDto {
   @IsString()
-  @IsNotEmpty()
-  mintAddress: string;
+  readonly mintAddress: string;
 
   @IsNumber()
-  @Min(0.000000001) // Smallest possible amount to ensure it's positive
-  amountSol: number; // Required for buying
+  readonly amountSol: number;
 }
 
-/**
- * DTO for selling tokens.
- */
 export class SellTokenDto {
   @IsString()
-  @IsNotEmpty()
-  mintAddress: string;
+  readonly mintAddress: string;
 
   @IsNumber()
-  @Min(0.000000001) // Smallest possible amount to ensure it's positive
-  amountTokens: number; // Required for selling
+  readonly amountTokens: number;
 }
