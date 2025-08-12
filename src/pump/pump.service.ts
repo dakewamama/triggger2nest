@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { ConfigService } from '@nestjs/config';
-import { PumpFunSDK, DEFAULT_DECIMALS } from 'pumpdotfun-sdk';
+import { DEFAULT_DECIMALS, PumpFunSDK } from 'pumpdotfun-sdk';
 import { AnchorProvider } from '@coral-xyz/anchor';
+// Fixed NodeWallet import problem
 import NodeWallet from '@coral-xyz/anchor/dist/cjs/nodewallet';
 import { CreateTokenDto, BuyTokenDto, SellTokenDto } from './dto/pump.dto';
-import BN from 'bn.js';
 import * as fs from 'fs';
 
 @Injectable()
@@ -16,241 +16,301 @@ export class PumpService {
   private provider: AnchorProvider;
   private pumpFunSdk: PumpFunSDK;
   private readonly rpcUrl: string;
+  private readonly programId: PublicKey;
 
   constructor(private configService: ConfigService) {
-    this.rpcUrl = this.configService.get<string>('SOLANA_RPC_URL') || 'https://api.mainnet-beta.solana.com';
+    //boggey the connection to soL RPC
+    this.rpcUrl = this.configService.get<string>('SOLANA_RPC_URL') || 'https://api.devnet.solana.com';
     this.connection = new Connection(this.rpcUrl, 'confirmed');
 
+    // Set the correct program ID
+    this.programId = new PublicKey(
+      this.configService.get<string>('PUMP_PROGRAM_ID') ||
+        '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'
+    );
+
+    // Load or generate payer keypair
     const privateKey = this.configService.get<string>('SOLANA_PRIVATE_KEY');
     if (!privateKey) {
-      this.logger.error('SOLANA_PRIVATE_KEY environment variable is not set. Using a dummy keypair for demonstration.');
+      this.logger.error('SOLANA_PRIVATE_KEY not set; generating a random keypair (dev only).');
       this.payer = Keypair.generate();
     } else {
       try {
-        const secretKeyArray = JSON.parse(privateKey);
-        this.payer = Keypair.fromSecretKey(new Uint8Array(secretKeyArray));
+        const secret = JSON.parse(privateKey);
+        this.payer = Keypair.fromSecretKey(new Uint8Array(secret));
         this.logger.log(`Wallet loaded: ${this.payer.publicKey.toBase58()}`);
-      } catch (e) {
-        this.logger.error('Failed to parse SOLANA_PRIVATE_KEY. Ensure it is a valid JSON array string of numbers.', e);
+      } catch (err) {
+        this.logger.error('Failed to parse SOLANA_PRIVATE_KEY; generating random keypair', err);
         this.payer = Keypair.generate();
-        this.logger.log(` Devnet Wallet Address: ${this.payer.publicKey.toBase58()}`);
-
+        this.logger.log(`Generated dev Wallet: ${this.payer.publicKey.toBase58()}`);
       }
     }
 
-    // Create AnchorProvider with NodeWallet
+    // Anchor provider
     const wallet = new NodeWallet(this.payer);
-    this.provider = new AnchorProvider(this.connection, wallet, { 
+    this.provider = new AnchorProvider(this.connection, wallet, {
       commitment: 'confirmed',
-      preflightCommitment: 'confirmed' 
+      preflightCommitment: 'confirmed',
     });
 
-    // Initialize PumpFunSDK with the provider
+    // Initialize PumpFunSDK (it uses default program ID internally)
     this.pumpFunSdk = new PumpFunSDK(this.provider);
+    this.logger.log(`Using Pump.fun program: ${this.programId.toBase58()}`);
   }
 
-  /**
-   * Creates a new token on Pump.fun and buys some tokens immediately.
-   * @param data DTO containing name, symbol, and description.
-   * @param buyAmountSol Amount of SOL to spend on initial purchase (default: 0.0001 SOL).
-   * @param imageFile Optional image file buffer for token logo.
-   * @param imageFilePath Optional path to image file (alternative to imageFile buffer).
-   * @returns Transaction result with success status and signature.
-   */
+  // Helper method to convert Buffer to Blob safely
+  private bufferToBlob(buffer: Buffer): Blob {
+    const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
+    return new Blob([arrayBuffer]);
+  }
+
   async createToken(
-    data: CreateTokenDto, 
-    buyAmountSol: number = 0.0001, 
-    imageFile?: Buffer, 
+    data: CreateTokenDto,
+    buyAmountSol: number = 0.001,
+    imageFile?: Buffer,
     imageFilePath?: string
   ): Promise<any> {
     this.logger.log(`Attempting to create token: ${data.name} (${data.symbol})`);
     try {
-      // Generate a new mint keypair for the token
+      const balance = await this.connection.getBalance(this.payer.publicKey);
+      const balanceInSol = balance / LAMPORTS_PER_SOL;
+      if (balanceInSol < buyAmountSol + 0.01) {
+        throw new Error(`Insufficient SOL: need ${buyAmountSol + 0.01}, have ${balanceInSol}`);
+      }
+
       const mint = Keypair.generate();
-      
-      // Handle image file
-      let fileBuffer = imageFile;
+      this.logger.log(`Generated mint: ${mint.publicKey.toBase58()}`);
+
+      const [creatorVault] = await PublicKey.findProgramAddress(
+        [Buffer.from('creator_vault'), this.payer.publicKey.toBuffer(), mint.publicKey.toBuffer()],
+        this.programId
+      );
+      this.logger.log(`Expected creator vault: ${creatorVault.toBase58()}`);
+
+      let fileBuffer: Buffer | undefined = imageFile;
       if (!fileBuffer && imageFilePath) {
         try {
           fileBuffer = await fs.promises.readFile(imageFilePath);
-        } catch (error) {
-          this.logger.warn(`Failed to read image file: ${imageFilePath}`, error.message);
+        } catch {
+          this.logger.warn('Failed to read image file, using empty buffer');
           fileBuffer = Buffer.alloc(0);
         }
       }
 
-      // Convert Buffer to Blob for SDK compatibility
-      const fileBlob = fileBuffer ? new Blob([fileBuffer]) : new Blob();
+      const fileBlob = fileBuffer && fileBuffer.length > 0 ? this.bufferToBlob(fileBuffer) : new Blob();
+
       const tokenMetadata = {
         name: data.name,
         symbol: data.symbol,
-        description: data.description,
-        file: fileBlob, 
+        description: data.description || '',
+        file: fileBlob,
       };
 
-      const SLIPPAGE_BASIS_POINTS = 500n; // 5% slippage
-      const buyAmount = BigInt(Math.floor(buyAmountSol * LAMPORTS_PER_SOL));
+      const buyLamports = BigInt(Math.floor(buyAmountSol * LAMPORTS_PER_SOL));
+      const slippage = 500n;
 
-      // Use createAndBuy method from SDK
+      const computeBudgetOpts = {
+        unitLimit: 300000,
+        unitPrice: 1000000,
+      };
+
       const result = await this.pumpFunSdk.createAndBuy(
         this.payer,
         mint,
         tokenMetadata,
-        buyAmount,
-        SLIPPAGE_BASIS_POINTS,
-        {
-          unitLimit: 250000,
-          unitPrice: 250000,
-        }
+        buyLamports,
+        slippage,
+        computeBudgetOpts
       );
 
       if (result.success) {
-        this.logger.log(`Token created successfully. Mint: ${mint.publicKey.toBase58()}`);
-        this.logger.log(`Transaction signature: ${result.signature}`);
         return {
           success: true,
           signature: result.signature,
           mintAddress: mint.publicKey.toBase58(),
-          pumpUrl: `https://pump.fun/${mint.publicKey.toBase58()}`
+          pumpUrl: `https://pump.fun/${mint.publicKey.toBase58()}`,
+          creatorVault: creatorVault.toBase58(),
         };
       } else {
-        this.logger.error('Token creation failed:', result.error);
+        this.logger.error('CreateAndBuy failed:', result.error);
         throw new Error(`Token creation failed: ${result.error}`);
       }
     } catch (error) {
-      this.logger.error('Error in createToken:', error.message, error.stack);
-      throw new Error(`Failed to create token: ${error.message}`);
+      this.logger.error('Error in createToken:', error);
+
+      if (error.message.includes('ConstraintSeeds')) {
+        throw new Error('PDA seed constraint violation: verify program ID and account derivation');
+      } else if (error.message.includes('0x7d6')) {
+        throw new Error('Anchor constraint violation: check account seeds and program ID');
+      } else {
+        throw new Error(`Token creation failed: ${error.message}`);
+      }
     }
   }
 
-  /**
-   * Buys a specified amount of a token on Pump.fun.
-   * @param data DTO containing mint address and amount (in SOL).
-   * @returns Transaction result with success status and signature.
-   */
-  async buyToken(data: BuyTokenDto): Promise<any> {
-    this.logger.log(`Attempting to buy token ${data.mintAddress} for ${data.amountSol} SOL`);
+  async createTokenOnly(data: CreateTokenDto, imageFile?: Buffer): Promise<any> {
+    this.logger.log(`Creating token with minimal buy: ${data.name} (${data.symbol})`);
     try {
+      const mint = Keypair.generate();
+      const fileBlob = imageFile && imageFile.length > 0 ? this.bufferToBlob(imageFile) : new Blob();
+
+      const tokenMetadata = {
+        name: data.name,
+        symbol: data.symbol,
+        description: data.description || '',
+        file: fileBlob,
+      };
+
+      const minimalBuyLamports = BigInt(Math.floor(0.0001 * LAMPORTS_PER_SOL));
+      const slippage = 500n;
+      const computeBudgetOpts = { unitLimit: 200000, unitPrice: 1000000 };
+
+      const result = await this.pumpFunSdk.createAndBuy(
+        this.payer,
+        mint,
+        tokenMetadata,
+        minimalBuyLamports,
+        slippage,
+        computeBudgetOpts
+      );
+
+      if (result.success) {
+        return {
+          success: true,
+          signature: result.signature,
+          mintAddress: mint.publicKey.toBase58(),
+          pumpUrl: `https://pump.fun/${mint.publicKey.toBase58()}`,
+        };
+      } else {
+        throw new Error(`Token creation failed: ${result.error}`);
+      }
+    } catch (error) {
+      this.logger.error('Error in createTokenOnly:', error);
+      throw new Error(`Token creation failed: ${error.message}`);
+    }
+  }
+
+  async buyToken(data: BuyTokenDto): Promise<any> {
+    this.logger.log(`Attempting to buy ${data.amountSol} SOL of ${data.mintAddress}`);
+    try {
+      const balance = await this.connection.getBalance(this.payer.publicKey);
+      const balanceInSol = balance / LAMPORTS_PER_SOL;
+      if (balanceInSol < data.amountSol + 0.01) {
+        throw new Error(`Insufficient SOL: need ${data.amountSol + 0.01}, have ${balanceInSol}`);
+      }
+
       const mint = new PublicKey(data.mintAddress);
-      const buyAmount = BigInt(Math.floor(data.amountSol * LAMPORTS_PER_SOL));
-      const SLIPPAGE_BASIS_POINTS = 500n; // 5% slippage
+      const buyLamports = BigInt(Math.floor(data.amountSol * LAMPORTS_PER_SOL));
+      const slippage = 500n;
+      const computeBudgetOpts = { unitLimit: 300000, unitPrice: 1000000 };
+
+      const bondingCurve = await this.getBondingCurve(data.mintAddress);
+      if (!bondingCurve) {
+        throw new Error('Token bonding curve not found - token may not exist on Pump.fun');
+      }
 
       const result = await this.pumpFunSdk.buy(
         this.payer,
         mint,
-        buyAmount,
-        SLIPPAGE_BASIS_POINTS,
-        {
-          unitLimit: 250000,
-          unitPrice: 250000,
-        }
+        buyLamports,
+        slippage,
+        computeBudgetOpts
       );
 
       if (result.success) {
-        this.logger.log(`Buy transaction successful: ${result.signature}`);
-        return {
-          success: true,
-          signature: result.signature,
-          mintAddress: data.mintAddress
-        };
+        return { success: true, signature: result.signature };
       } else {
-        this.logger.error('Buy transaction failed:', result.error);
-        throw new Error(`Buy transaction failed: ${result.error}`);
+        throw new Error(`Buy failed: ${result.error}`);
       }
     } catch (error) {
-      this.logger.error('Error in buyToken:', error.message, error.stack);
-      throw new Error(`Failed to buy token: ${error.message}`);
+      this.logger.error('Error in buyToken:', error.message);
+      throw new Error(error.message);
     }
   }
 
-  /**
-   * Sells a specified amount of a token on Pump.fun.
-   * @param data DTO containing mint address and amount (of tokens to sell).
-   * @returns Transaction result with success status and signature.
-   */
   async sellToken(data: SellTokenDto): Promise<any> {
-    this.logger.log(`Attempting to sell ${data.amountTokens} tokens of ${data.mintAddress}`);
+    this.logger.log(`Attempting to sell ${data.amountTokens} of ${data.mintAddress}`);
     try {
       const mint = new PublicKey(data.mintAddress);
-      // Convert token amount to raw amount (multiply by decimals)
       const sellAmount = BigInt(Math.floor(data.amountTokens * Math.pow(10, DEFAULT_DECIMALS)));
-      const SLIPPAGE_BASIS_POINTS = 500n; // 5% slippage
+      const slippage = 500n;
+      const computeBudgetOpts = { unitLimit: 300000, unitPrice: 1000000 };
 
       const result = await this.pumpFunSdk.sell(
         this.payer,
         mint,
         sellAmount,
-        SLIPPAGE_BASIS_POINTS,
-        {
-          unitLimit: 250000,
-          unitPrice: 250000,
-        }
+        slippage,
+        computeBudgetOpts
       );
 
       if (result.success) {
-        this.logger.log(`Sell transaction successful: ${result.signature}`);
-        return {
-          success: true,
-          signature: result.signature,
-          mintAddress: data.mintAddress
-        };
+        return { success: true, signature: result.signature };
       } else {
-        this.logger.error('Sell transaction failed:', result.error);
-        throw new Error(`Sell transaction failed: ${result.error}`);
+        throw new Error(`Sell failed: ${result.error}`);
       }
     } catch (error) {
-      this.logger.error('Error in sellToken:', error.message, error.stack);
-      throw new Error(`Failed to sell token: ${error.message}`);
+      this.logger.error('Error in sellToken:', error.message);
+      throw new Error(error.message);
     }
   }
 
-  /**
-   * Get token balance for the current wallet
-   * @param mintAddress The mint address of the token
-   * @returns Token balance
-   */
   async getTokenBalance(mintAddress: string): Promise<number> {
+    const mint = new PublicKey(mintAddress);
+    const { getAssociatedTokenAddress } = await import('@solana/spl-token');
+    const ata = await getAssociatedTokenAddress(mint, this.payer.publicKey);
     try {
-      const mint = new PublicKey(mintAddress);
-      // You'll need to implement getSPLBalance utility similar to the SDK example
-      // This is a placeholder - you'll need to add the actual balance checking logic
-      this.logger.log(`Getting balance for token: ${mintAddress}`);
-      
-      // For now, return 0 - you should implement proper balance checking
+      const bal = await this.connection.getTokenAccountBalance(ata);
+      return bal.value.uiAmount || 0;
+    } catch {
       return 0;
-    } catch (error) {
-      this.logger.error('Error getting token balance:', error.message);
-      throw new Error(`Failed to get token balance: ${error.message}`);
     }
   }
 
-  /**
-   * Get bonding curve information for a token
-   * @param mintAddress The mint address of the token
-   * @returns Bonding curve account data
-   */
   async getBondingCurve(mintAddress: string): Promise<any> {
     try {
       const mint = new PublicKey(mintAddress);
-      const bondingCurve = await this.pumpFunSdk.getBondingCurveAccount(mint);
-      return bondingCurve;
+      return await this.pumpFunSdk.getBondingCurveAccount(mint);
     } catch (error) {
-      this.logger.error('Error getting bonding curve:', error.message);
-      throw new Error(`Failed to get bonding curve: ${error.message}`);
+      this.logger.warn(`Failed to get bonding curve for ${mintAddress}:`, error.message);
+      return null;
     }
   }
 
-  /**
-   * Get global Pump.fun account information
-   * @returns Global account data
-   */
   async getGlobalAccount(): Promise<any> {
-    try {
-      const globalAccount = await this.pumpFunSdk.getGlobalAccount();
-      return globalAccount;
-    } catch (error) {
-      this.logger.error('Error getting global account:', error.message);
-      throw new Error(`Failed to get global account: ${error.message}`);
-    }
+    return this.pumpFunSdk.getGlobalAccount();
+  }
+
+  async getWalletBalance(): Promise<number> {
+    const bal = await this.connection.getBalance(this.payer.publicKey);
+    return bal / LAMPORTS_PER_SOL;
+  }
+
+  getWalletAddress(): string {
+    return this.payer.publicKey.toBase58();
+  }
+
+  async debugPDADerivation(mintAddress: string): Promise<any> {
+    const mint = new PublicKey(mintAddress);
+
+    const [creatorVault, creatorVaultBump] = await PublicKey.findProgramAddress(
+      [Buffer.from('creator_vault'), this.payer.publicKey.toBuffer(), mint.toBuffer()],
+      this.programId
+    );
+
+    const [bondingCurve, bondingCurveBump] = await PublicKey.findProgramAddress(
+      [Buffer.from('bonding_curve'), mint.toBuffer()],
+      this.programId
+    );
+
+    return {
+      mint: mint.toBase58(),
+      creator: this.payer.publicKey.toBase58(),
+      programId: this.programId.toBase58(),
+      creatorVault: creatorVault.toBase58(),
+      creatorVaultBump,
+      bondingCurve: bondingCurve.toBase58(),
+      bondingCurveBump,
+    };
   }
 }
