@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { pumpService } from '../services/pumpService'  
+import { pumpService } from '../services/pumpService'
 import type { CreateTokenDto, TokenResponse, ApiError } from '../types'
 
 interface UseTokenCreationReturn {
-  createToken: (data: CreateTokenDto) => Promise<TokenResponse | null>
+  createToken: (data: CreateTokenDto, imageFile?: File) => Promise<TokenResponse | null>
   isLoading: boolean
   error: ApiError | null
   success: TokenResponse | null
@@ -15,13 +15,13 @@ export function useTokenCreation(): UseTokenCreationReturn {
   const [error, setError] = useState<ApiError | null>(null)
   const [success, setSuccess] = useState<TokenResponse | null>(null)
 
-  const createToken = async (data: CreateTokenDto): Promise<TokenResponse | null> => {
+  const createToken = async (data: CreateTokenDto, imageFile?: File): Promise<TokenResponse | null> => {
     setIsLoading(true)
     setError(null)
     setSuccess(null)
 
     try {
-      const response = await pumpService.createToken(data)
+      const response = await pumpService.createToken(data, imageFile)
       setSuccess(response)
       return response
     } catch (err: any) {

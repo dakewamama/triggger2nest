@@ -1,4 +1,4 @@
-
+// API Response types for our pump.fun backend
 export interface TokenResponse {
   message: string;
   transactionId: string;
@@ -11,6 +11,10 @@ export interface CreateTokenDto {
   name: string;
   symbol: string;
   description: string;
+}
+
+export interface CreateTokenWithImageDto extends CreateTokenDto {
+  image?: File;
 }
 
 export interface BuyTokenDto {

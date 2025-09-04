@@ -4,6 +4,7 @@ import type { CreateTokenDto } from '../../types'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
 import Textarea from '../ui/Textarea'
+import ImageUpload from '../ui/ImageUpload'
 import { CheckCircle, AlertCircle, ExternalLink } from 'lucide-react'
 
 export default function CreateTokenForm() {
@@ -15,6 +16,7 @@ export default function CreateTokenForm() {
     description: '',
   })
 
+  const [imageFile, setImageFile] = useState<File | null>(null)
   const [formErrors, setFormErrors] = useState<Partial<CreateTokenDto>>({})
 
   const handleInputChange = (field: keyof CreateTokenDto, value: string) => {
@@ -23,6 +25,10 @@ export default function CreateTokenForm() {
     if (formErrors[field]) {
       setFormErrors(prev => ({ ...prev, [field]: undefined }))
     }
+  }
+
+  const handleImageChange = (file: File | null) => {
+    setImageFile(file)
   }
 
   const validateForm = (): boolean => {
@@ -65,11 +71,12 @@ export default function CreateTokenForm() {
       symbol: formData.symbol.toUpperCase(),
     }
 
-    await createToken(tokenData)
+    await createToken(tokenData, imageFile || undefined)
   }
 
   const handleReset = () => {
     setFormData({ name: '', symbol: '', description: '' })
+    setImageFile(null)
     setFormErrors({})
     reset()
   }
@@ -107,9 +114,15 @@ export default function CreateTokenForm() {
           maxLength={500}
         />
 
+        <ImageUpload
+          onImageChange={handleImageChange}
+          disabled={isLoading}
+        />
+
         <div className="text-sm text-gray-400">
           <p>• Creating a token costs ~0.001 SOL</p>
           <p>• Make sure your wallet has sufficient balance</p>
+          <p>• Image upload is optional but recommended</p>
         </div>
 
         <div className="flex gap-4">
@@ -143,19 +156,29 @@ export default function CreateTokenForm() {
             <div className="flex-1">
               <h3 className="font-semibold text-green-400 mb-2">Token Created Successfully!</h3>
               <div className="text-sm space-y-1">
-                <p><span className="text-gray-400">Transaction:</span> <code className="bg-gray-800 px-2 py-1 rounded text-xs">{success.transactionId}</code></p>
+                <p>
+                  <span className="text-gray-400">Transaction:</span>{' '}
+                  <code className="bg-gray-800 px-2 py-1 rounded text-xs">
+                    {success.transactionId}
+                  </code>
+                </p>
                 {success.mintAddress && (
-                  <p><span className="text-gray-400">Mint Address:</span> <code className="bg-gray-800 px-2 py-1 rounded text-xs">{success.mintAddress}</code></p>
+                  <p>
+                    <span className="text-gray-400">Mint Address:</span>{' '}
+                    <code className="bg-gray-800 px-2 py-1 rounded text-xs">
+                      {success.mintAddress}
+                    </code>
+                  </p>
                 )}
                 {success.pumpUrl && (
-                    <a
-                        href={success.pumpUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-green-400 hover:text-green-300 mt-2"
-                    >
-                        View on Pump.fun <ExternalLink className="h-4 w-4" />
-                    </a>
+                  <a
+                    href={success.pumpUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-green-400 hover:text-green-300 mt-2"
+                  >
+                    View on Pump.fun <ExternalLink className="h-4 w-4" />
+                  </a>
                 )}
               </div>
             </div>
