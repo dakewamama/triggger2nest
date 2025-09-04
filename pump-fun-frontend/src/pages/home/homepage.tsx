@@ -1,12 +1,21 @@
+import { env } from '../../config/env'
+
 export default function HomePage() {
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-4xl font-bold mb-4">Welcome to Pump.Fun</h1>
+      <h1 className="text-4xl font-bold mb-4">Welcome to trigger</h1>
       <p className="text-gray-300 mb-8">
         Create and trade tokens on Solana
       </p>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+      {/* API URL Display */}
+      <div className="mt-4 p-4 bg-gray-800 rounded">
+        <p className="text-sm text-gray-400">
+          API URL: {env.API_URL}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
         <div className="bg-gray-800 p-6 rounded-lg">
           <h3 className="text-xl font-semibold mb-2">Create Token</h3>
           <p className="text-gray-400">Launch your own token in minutes</p>
