@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { env } from '../config/env'
+import { env } from '../../config/env'
 
 // Create axios instance with base configuration
 export const apiClient = axios.create({
