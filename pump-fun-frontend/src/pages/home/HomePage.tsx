@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   TrendingUp, 
@@ -7,13 +7,12 @@ import {
   Search, 
   RefreshCw,
   ExternalLink,
-  Copy,
   ArrowUpRight,
   ArrowDownRight,
   Loader2
 } from 'lucide-react';
-import { pumpFunApi, PumpToken } from '../services/pump-api/pump-fun.service';
-import { useWallet } from '../contexts/WalletContext';
+import { pumpFunApi, type PumpToken } from '../../services/pump-api/pump-fun.service';
+import { useWallet } from '../../hooks/useWallet';
 
 export default function HomePage() {
   const { isConnected } = useWallet();
@@ -94,11 +93,6 @@ export default function HomePage() {
   
   const truncateAddress = (address: string) => {
     return `${address.slice(0, 4)}...${address.slice(-4)}`;
-  };
-  
-  const copyToClipboard = async (text: string) => {
-    await navigator.clipboard.writeText(text);
-    // You could add a toast notification here
   };
   
   return (

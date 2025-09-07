@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useWallet } from '../../contexts/WalletContext';
+import { useWallet } from '../../hooks/useWallet';
 import { pumpService } from '../../services/api/pumpService';
 import { Upload, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 

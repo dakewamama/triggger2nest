@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, ExternalLink, Copy, TrendingUp, Users, Activity, Loader2 } from 'lucide-react';
-import { pumpFunApi, PumpToken, TokenTrade } from '../services/pump-api/pump-fun.service';
+import { ArrowLeft, ExternalLink, Loader2 } from 'lucide-react';
+import { pumpFunApi, type PumpToken, type TokenTrade } from '../../services/pump-api/pump-fun.service';
 import { pumpService } from '../../services/api/pumpService';
-import { useWallet } from '../contexts/WalletContext';
+import { useWallet } from '../../hooks/useWallet';
 
 export default function TokenDetailPage() {
   const { mintAddress } = useParams<{ mintAddress: string }>();
-  const { isConnected, address } = useWallet();
+  const { isConnected } = useWallet();
   const [token, setToken] = useState<PumpToken | null>(null);
   const [trades, setTrades] = useState<TokenTrade[]>([]);
   const [loading, setLoading] = useState(true);

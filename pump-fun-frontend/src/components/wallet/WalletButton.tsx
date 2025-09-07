@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useWallet } from '../../contexts/WalletContext';
+import { useWallet } from '../../hooks/useWallet';
 import { Wallet, LogOut, Copy, Check, ChevronDown } from 'lucide-react';
 
 export default function WalletButton() {

@@ -1,6 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { WalletProvider } from './contexts/WalletContext';
 import Layout from './components/layout/Layout';
 import HomePage from './pages/home/HomePage';
 import CreateTokenPage from './pages/token/CreateTokenPage';
@@ -77,10 +76,10 @@ function AppContent() {
 
 function App() {
   return (
-    <WalletProvider>
+    <>
       <AppContent />
       <SystemStatus />
-    </WalletProvider>
+    </>
   );
 }
 

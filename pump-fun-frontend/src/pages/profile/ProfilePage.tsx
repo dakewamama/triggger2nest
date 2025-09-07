@@ -1,9 +1,8 @@
-import React from 'react';
-import { useWallet } from '../contexts/WalletContext';
+import { useWallet } from '../../hooks/useWallet';
 import { User, Wallet, Coins, TrendingUp } from 'lucide-react';
 
 export default function ProfilePage() {
-  const { isConnected, address, balance, user } = useWallet();
+  const { isConnected, address, balance } = useWallet();
   
   if (!isConnected) {
     return (

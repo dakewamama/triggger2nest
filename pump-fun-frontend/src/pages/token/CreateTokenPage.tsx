@@ -1,6 +1,5 @@
-import React from 'react';
-import CreateTokenForm from '../components/forms/CreateTokenForm';
-import { useWallet } from '../contexts/WalletContext';
+import CreateTokenForm from '../../components/forms/CreateTokenForm';
+import { useWallet } from '../../hooks/useWallet';
 import { Coins, AlertCircle } from 'lucide-react';
 
 export default function CreateTokenPage() {

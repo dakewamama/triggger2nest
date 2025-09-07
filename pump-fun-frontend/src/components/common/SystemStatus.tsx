@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, AlertCircle, RefreshCw, Loader2 } from 'lucide-react';
 import { pumpService } from '../../services/api/pumpService'
 import { pumpFunApi } from '../../services/pump-api/pump-fun.service';
-import { useWallet } from '../../contexts/WalletContext';
+import { useWallet } from '../../hooks/useWallet';
 import { ENV } from '../../config/env';
 
 interface StatusCheck {
