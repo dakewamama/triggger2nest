@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { WalletProvider } from './contexts/WalletContext';
 import Layout from './components/layout/Layout';
-import HomePage from './pages/HomePage';
-import CreateTokenPage from './pages/CreateTokenPage';
-import TokenDetailPage from './pages/TokenDetailPage';
-import ProfilePage from './pages/ProfilePage';
-import { pumpService } from './services/api/pump.service';
+import HomePage from './pages/home/HomePage';
+import CreateTokenPage from './pages/token/CreateTokenPage';
+import TokenDetailPage from './pages/token/TokenDetailPage';
+import ProfilePage from './pages/profile/ProfilePage';
+import { pumpService } from './services/api/pumpService';
+import SystemStatus from './components/common/SystemStatus';
 
 function AppContent() {
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
@@ -78,10 +79,9 @@ function App() {
   return (
     <WalletProvider>
       <AppContent />
+      <SystemStatus />
     </WalletProvider>
   );
 }
 
 export default App;
-
-// ===== src/components/layout/Layout.tsx =====

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { pumpService } from '../services/api/pump.service';
-import { CreateTokenDto, TokenResponse } from '../services/api/pump.service';
+import { pumpService } from '../services/api/pumpService';
+import type { CreateTokenDto, TokenResponse } from '../services/api/pumpService';
 import { getErrorMessage } from '../utils/helpers';
 
 interface UseTokenCreationReturn {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { pumpFunApi, PumpToken } from '../services/pump-api/pump-fun.service';
+import { pumpFunApi, type PumpToken } from '../services/pump-api/pump-fun.service';
 import { debounce } from '../utils/helpers';
 
 interface UseTokensOptions {
