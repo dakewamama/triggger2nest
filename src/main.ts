@@ -1,68 +1,81 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as express from 'express';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 
 async function bootstrap() {
-  const logger = new Logger('Bootstrap');
+  const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
   
-  const app = await NestFactory.create(AppModule, {
-    logger: ['error', 'warn', 'log', 'debug'],
+  // Enable CORS
+  app.enableCors({
+    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  const configService = app.get(ConfigService);
-
-  // Enable validation
+  // Global validation pipe
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      forbidNonWhitelisted: true,
       transform: true,
-      transformOptions: {
-        enableImplicitConversion: true,
-      },
+      forbidNonWhitelisted: true,
     }),
   );
 
-  // Configure CORS properly
-  app.enableCors({
-    origin: (origin, callback) => {
-      const allowedOrigins = [
-        'http://localhost:5173',
-        'http://localhost:5174',
-        'http://127.0.0.1:5173',
-        'http://127.0.0.1:5174',
-        'http://localhost:3001', // Alternative frontend port
-      ];
-
-      // Allow requests with no origin (Postman, mobile apps, etc.)
-      if (!origin) {
-        return callback(null, true);
-      }
-
-      // Check if origin is allowed
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        logger.warn(`CORS blocked origin: ${origin}`);
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  // Health check endpoint
+  app.use('/health', (req, res) => {
+    res.json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development'
+    });
   });
 
-  const port = configService.get<number>('PORT') || 3000;
+  // Basic root endpoint
+  app.use('/', (req, res, next) => {
+    if (req.path === '/' && req.method === 'GET') {
+      res.json({ 
+        message: 'Pump Fun API',
+        version: '1.0.0',
+        endpoints: {
+          health: '/health',
+          tokens: '/api/tokens',
+          wallet: '/api/wallet',
+          trading: '/api/trading'
+        }
+      });
+    } else {
+      next();
+    }
+  });
+
+  // Proxy for pump.fun API to avoid CORS issues
+  app.use('/proxy/pump-fun', createProxyMiddleware({
+    target: 'https://frontend-api.pump.fun',
+    changeOrigin: true,
+    pathRewrite: {
+      '^/proxy/pump-fun': '',
+    },
+    onProxyReq: (proxyReq, req, res) => {
+      // Add any necessary headers
+      proxyReq.setHeader('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+    },
+    onError: (err, req, res) => {
+      console.error('Proxy error:', err);
+      res.status(500).json({ error: 'Proxy error', message: err.message });
+    },
+  }));
+
+  const port = process.env.PORT || 3000;
+  await app.listen(port);
   
-  await app.listen(port, '0.0.0.0');
-  
-  logger.log(`🚀 Server running on http://localhost:${port}`);
-  logger.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  logger.log(`🔌 Accepting connections from frontend`);
+  console.log(`🚀 Application is running on: http://localhost:${port}`);
+  console.log(`📌 Health check: http://localhost:${port}/health`);
+  console.log(`📌 Environment: ${process.env.NODE_ENV || 'development'}`);
 }
 
-bootstrap().catch((err) => {
-  console.error('❌ Failed to start server:', err);
-  process.exit(1);
-});
+bootstrap();
