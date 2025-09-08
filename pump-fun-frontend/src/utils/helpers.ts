@@ -1,80 +1,120 @@
-export const sleep = (ms: number): Promise<void> => {
-  return new Promise(resolve => setTimeout(resolve, ms));
-};
+import { PublicKey } from '@solana/web3.js'
 
-export const debounce = <T extends (...args: any[]) => any>(
-  func: T,
-  delay: number
-): ((...args: Parameters<T>) => void) => {
-  let timeoutId: NodeJS.Timeout;
-  
-  return (...args: Parameters<T>) => {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => func(...args), delay);
-  };
-};
+// Constants
+export const DEFAULT_TOKEN_DECIMALS = 6
+export const LAMPORTS_PER_SOL = 1e9
 
-export const throttle = <T extends (...args: any[]) => any>(
-  func: T,
-  limit: number
-): ((...args: Parameters<T>) => void) => {
-  let inThrottle: boolean;
-  
-  return (...args: Parameters<T>) => {
-    if (!inThrottle) {
-      func(...args);
-      inThrottle = true;
-      setTimeout(() => (inThrottle = false), limit);
-    }
-  };
-};
+export const formatAddress = (address: string, length = 4): string => {
+  if (!address) return ''
+  if (address.length <= length * 2) return address
+  return `${address.slice(0, length)}...${address.slice(-length)}`
+}
+
+export const formatNumber = (num: number): string => {
+  if (num >= 1e9) {
+    return `${(num / 1e9).toFixed(2)}B`
+  } else if (num >= 1e6) {
+    return `${(num / 1e6).toFixed(2)}M`
+  } else if (num >= 1e3) {
+    return `${(num / 1e3).toFixed(2)}K`
+  }
+  return num.toFixed(2)
+}
+
+export const formatPrice = (price: number): string => {
+  if (price < 0.01) {
+    return price.toExponential(2)
+  }
+  return price.toFixed(6)
+}
+
+export const formatMarketCap = (marketCap: number): string => {
+  return `$${formatNumber(marketCap)}`
+}
 
 export const copyToClipboard = async (text: string): Promise<boolean> => {
   try {
-    await navigator.clipboard.writeText(text);
-    return true;
+    await navigator.clipboard.writeText(text)
+    return true
   } catch (error) {
-    console.error('Failed to copy to clipboard:', error);
-    return false;
+    console.error('Failed to copy to clipboard:', error)
+    return false
   }
-};
+}
 
-export const validateSolanaAddress = (address: string): boolean => {
-  // Basic validation - Solana addresses are base58 encoded and typically 44 characters
-  const solanaAddressRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-  return solanaAddressRegex.test(address);
-};
+export const isValidSolanaAddress = (address: string): boolean => {
+  try {
+    new PublicKey(address)
+    return true
+  } catch {
+    return false
+  }
+}
 
-export const validateTokenSymbol = (symbol: string): boolean => {
-  // Token symbols should be alphanumeric and uppercase
-  const symbolRegex = /^[A-Z0-9]+$/;
-  return symbolRegex.test(symbol) && symbol.length <= 10;
-};
+export const sleep = (ms: number): Promise<void> => {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
 
-export const getErrorMessage = (error: any): string => {
-  if (typeof error === 'string') return error;
-  if (error?.response?.data?.error) return error.response.data.error;
-  if (error?.response?.data?.message) return error.response.data.message;
-  if (error?.message) return error.message;
-  return 'An unexpected error occurred';
-};
+export const debounce = <T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): ((...args: Parameters<T>) => void) => {
+  let timeoutId: NodeJS.Timeout | null = null
+  
+  return (...args: Parameters<T>) => {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
+    
+    timeoutId = setTimeout(() => {
+      func(...args)
+    }, wait)
+  }
+}
 
-export const calculatePriceImpact = (
-  inputAmount: number,
-  outputAmount: number,
-  spotPrice: number
-): number => {
-  const executionPrice = inputAmount / outputAmount;
-  const priceImpact = ((executionPrice - spotPrice) / spotPrice) * 100;
-  return Math.abs(priceImpact);
-};
+export const getExplorerUrl = (
+  address: string,
+  type: 'address' | 'tx' = 'address'
+): string => {
+  const baseUrl = 'https://solscan.io'
+  return `${baseUrl}/${type}/${address}`
+}
+
+export const formatTokenAmount = (
+  amount: number,
+  decimals: number = DEFAULT_TOKEN_DECIMALS
+): string => {
+  const value = amount / Math.pow(10, decimals)
+  return formatNumber(value)
+}
 
 export const parseTokenAmount = (
   amount: string,
   decimals: number = DEFAULT_TOKEN_DECIMALS
 ): number => {
-  const cleanAmount = amount.replace(/,/g, '');
-  const parsed = parseFloat(cleanAmount);
-  if (isNaN(parsed)) return 0;
-  return parsed * Math.pow(10, decimals);
-};
+  const value = parseFloat(amount)
+  if (isNaN(value)) return 0
+  return Math.floor(value * Math.pow(10, decimals))
+}
+
+export const calculatePriceImpact = (
+  inputAmount: number,
+  outputAmount: number,
+  reserveInput: number,
+  reserveOutput: number
+): number => {
+  const exactQuote = (inputAmount * reserveOutput) / reserveInput
+  const slippage = ((exactQuote - outputAmount) / exactQuote) * 100
+  return Math.abs(slippage)
+}
+
+export const getPriceFromReserves = (
+  solReserves: number,
+  tokenReserves: number,
+  tokenDecimals: number = DEFAULT_TOKEN_DECIMALS
+): number => {
+  if (tokenReserves === 0) return 0
+  const solAmount = solReserves / LAMPORTS_PER_SOL
+  const tokenAmount = tokenReserves / Math.pow(10, tokenDecimals)
+  return solAmount / tokenAmount
+}

@@ -1,35 +1,40 @@
 import axios from 'axios'
-import { env } from '../../config/env'
+import { ENV } from '../../config/env'
 
-// Create axios instance with base configuration
-export const apiClient = axios.create({
-  baseURL: env.API_BASE_URL,
-  timeout: env.API_TIMEOUT,
+const API_BASE_URL = ENV.API_URL
+
+export const api = axios.create({
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000,
 })
 
-// Request interceptor for debugging
-apiClient.interceptors.request.use(
+// Add request interceptor for debugging
+api.interceptors.request.use(
   (config) => {
-    console.log(`Making ${config.method?.toUpperCase()} request to:`, config.url)
+    console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`)
     return config
   },
   (error) => {
-    console.error('Request error:', error)
+    console.error('[API] Request error:', error)
     return Promise.reject(error)
   }
 )
 
-// Response interceptor for error handling
-apiClient.interceptors.response.use(
+// Add response interceptor for error handling
+api.interceptors.response.use(
   (response) => {
-    console.log('API Response:', response.status, response.data)
     return response
   },
   (error) => {
-    console.error('API Error:', error.response?.data || error.message)
-    return Promise.reject(error)
+    console.error('[API] Response error:', error.response?.status, error.response?.data)
+    
+    if (error.code === 'ERR_NETWORK') {
+      throw new Error('Cannot connect to server. Please check if the backend is running.')
+    }
+    
+    throw error
   }
 )
