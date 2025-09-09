@@ -14,7 +14,7 @@ export default function Layout({ children }: LayoutProps) {
       </main>
       <footer className="bg-gray-800 border-t border-gray-700 py-6">
         <div className="container mx-auto px-4 text-center text-gray-400">
-          <p>© 2024 trigger - pump.fun controller exposure</p>
+          <p>© 2025 trigger - pump.fun controller exposure</p>
         </div>
       </footer>
     </div>
