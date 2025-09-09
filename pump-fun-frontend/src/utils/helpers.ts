@@ -1,120 +1,95 @@
-import { PublicKey } from '@solana/web3.js'
-
-// Constants
-export const DEFAULT_TOKEN_DECIMALS = 6
-export const LAMPORTS_PER_SOL = 1e9
-
-export const formatAddress = (address: string, length = 4): string => {
-  if (!address) return ''
-  if (address.length <= length * 2) return address
-  return `${address.slice(0, length)}...${address.slice(-length)}`
-}
-
-export const formatNumber = (num: number): string => {
-  if (num >= 1e9) {
-    return `${(num / 1e9).toFixed(2)}B`
-  } else if (num >= 1e6) {
-    return `${(num / 1e6).toFixed(2)}M`
-  } else if (num >= 1e3) {
-    return `${(num / 1e3).toFixed(2)}K`
+/**
+ * Extract error message from various error types
+ */
+export const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
   }
-  return num.toFixed(2)
-}
-
-export const formatPrice = (price: number): string => {
-  if (price < 0.01) {
-    return price.toExponential(2)
+  
+  if (typeof error === 'string') {
+    return error;
   }
-  return price.toFixed(6)
-}
-
-export const formatMarketCap = (marketCap: number): string => {
-  return `$${formatNumber(marketCap)}`
-}
-
-export const copyToClipboard = async (text: string): Promise<boolean> => {
-  try {
-    await navigator.clipboard.writeText(text)
-    return true
-  } catch (error) {
-    console.error('Failed to copy to clipboard:', error)
-    return false
+  
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String((error as any).message);
   }
-}
-
-export const isValidSolanaAddress = (address: string): boolean => {
-  try {
-    new PublicKey(address)
-    return true
-  } catch {
-    return false
+  
+  if (error && typeof error === 'object' && 'error' in error) {
+    return String((error as any).error);
   }
-}
+  
+  return 'An unknown error occurred';
+};
 
-export const sleep = (ms: number): Promise<void> => {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
-
+/**
+ * Debounce function to limit function calls
+ */
 export const debounce = <T extends (...args: any[]) => any>(
   func: T,
   wait: number
 ): ((...args: Parameters<T>) => void) => {
-  let timeoutId: NodeJS.Timeout | null = null
+  let timeout: NodeJS.Timeout;
   
   return (...args: Parameters<T>) => {
-    if (timeoutId) {
-      clearTimeout(timeoutId)
-    }
-    
-    timeoutId = setTimeout(() => {
-      func(...args)
-    }, wait)
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+};
+
+/**
+ * Format large numbers with appropriate suffixes
+ */
+export const formatNumber = (num: number): string => {
+  if (num >= 1e9) {
+    return (num / 1e9).toFixed(2) + 'B';
   }
-}
+  if (num >= 1e6) {
+    return (num / 1e6).toFixed(2) + 'M';
+  }
+  if (num >= 1e3) {
+    return (num / 1e3).toFixed(2) + 'K';
+  }
+  return num.toFixed(2);
+};
 
-export const getExplorerUrl = (
-  address: string,
-  type: 'address' | 'tx' = 'address'
-): string => {
-  const baseUrl = 'https://solscan.io'
-  return `${baseUrl}/${type}/${address}`
-}
+/**
+ * Format price with appropriate decimal places
+ */
+export const formatPrice = (price: number): string => {
+  if (price >= 1) {
+    return price.toFixed(2);
+  }
+  if (price >= 0.01) {
+    return price.toFixed(4);
+  }
+  return price.toFixed(6);
+};
 
-export const formatTokenAmount = (
-  amount: number,
-  decimals: number = DEFAULT_TOKEN_DECIMALS
-): string => {
-  const value = amount / Math.pow(10, decimals)
-  return formatNumber(value)
-}
+/**
+ * Truncate wallet address for display
+ */
+export const truncateAddress = (address: string, startLength = 4, endLength = 4): string => {
+  if (address.length <= startLength + endLength) {
+    return address;
+  }
+  return `${address.slice(0, startLength)}...${address.slice(-endLength)}`;
+};
 
-export const parseTokenAmount = (
-  amount: string,
-  decimals: number = DEFAULT_TOKEN_DECIMALS
-): number => {
-  const value = parseFloat(amount)
-  if (isNaN(value)) return 0
-  return Math.floor(value * Math.pow(10, decimals))
-}
+/**
+ * Sleep utility for async operations
+ */
+export const sleep = (ms: number): Promise<void> => {
+  return new Promise(resolve => setTimeout(resolve, ms));
+};
 
-export const calculatePriceImpact = (
-  inputAmount: number,
-  outputAmount: number,
-  reserveInput: number,
-  reserveOutput: number
-): number => {
-  const exactQuote = (inputAmount * reserveOutput) / reserveInput
-  const slippage = ((exactQuote - outputAmount) / exactQuote) * 100
-  return Math.abs(slippage)
-}
-
-export const getPriceFromReserves = (
-  solReserves: number,
-  tokenReserves: number,
-  tokenDecimals: number = DEFAULT_TOKEN_DECIMALS
-): number => {
-  if (tokenReserves === 0) return 0
-  const solAmount = solReserves / LAMPORTS_PER_SOL
-  const tokenAmount = tokenReserves / Math.pow(10, tokenDecimals)
-  return solAmount / tokenAmount
-}
+/**
+ * Validate Solana address format
+ */
+export const isValidSolanaAddress = (address: string): boolean => {
+  try {
+    // Basic validation - Solana addresses are 32-44 characters long and base58 encoded
+    return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
+  } catch {
+    return false;
+  }
+};

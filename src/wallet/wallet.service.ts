@@ -19,20 +19,4 @@ export class WalletService {
       throw new Error(`Failed to get balance: ${error.message}`);
     }
   }
-
-  async getTokenAccounts(address: string) {
-    try {
-      const publicKey = new PublicKey(address);
-      const tokenAccounts = await this.connection.getParsedTokenAccountsByOwner(
-        publicKey,
-        { programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') }
-      );
-      return tokenAccounts.value.map(account => ({
-        mint: account.account.data.parsed.info.mint,
-        balance: account.account.data.parsed.info.tokenAmount.uiAmount,
-      }));
-    } catch (error) {
-      throw new Error(`Failed to get token accounts: ${error.message}`);
-    }
-  }
 }

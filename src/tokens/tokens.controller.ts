@@ -5,6 +5,7 @@ export interface PumpFunToken {
   marketCap: number;
   volume24h: number;
   priceChange24h: number;
+  price?: number;
   mint: string;
   name: string;
   symbol: string;

@@ -198,6 +198,10 @@ export class TokensService implements OnModuleInit {
         bonding_curve: 'BONDING_CURVE_ADDRESS',
         associated_bonding_curve: 'ASSOCIATED_BONDING_CURVE',
         creator: 'CREATOR_ADDRESS',
+        marketCap: 50000,
+        volume24h: 10000,
+        priceChange24h: 5.2,
+        price: 0.001,
         market_cap: 50000,
         reply_count: 10,
         last_reply: Date.now(),
@@ -206,11 +210,14 @@ export class TokensService implements OnModuleInit {
         show_name: true,
         last_trade_timestamp: Date.now(),
         usd_market_cap: 50000,
-        price: 0.001,
-        priceChange24h: 5.2,
-        volume24h: 10000,
-      },
-      // Add more mock tokens as needed
+        raydium_pool: undefined,
+        website: undefined,
+        telegram: undefined,
+        twitter: undefined,
+        market_id: undefined,
+        inverted: false,
+        king_of_the_hill_timestamp: undefined,
+      }
     ];
   }
 }

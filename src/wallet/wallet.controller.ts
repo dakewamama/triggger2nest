@@ -10,10 +10,4 @@ export class WalletController {
     const balance = await this.walletService.getBalance(address);
     return { address, balance };
   }
-
-  @Get(':address/tokens')
-  async getTokenAccounts(@Param('address') address: string) {
-    const tokens = await this.walletService.getTokenAccounts(address);
-    return { address, tokens };
-  }
 }
