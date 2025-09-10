@@ -47,14 +47,16 @@ export interface TokenTrade {
 }
 
 class PumpFunApiService {
-  private apiUrl = ENV.PUMP_API_URL;
+  // Use your backend URL instead of direct Pump API
+  private apiUrl = ENV.API_URL; // This will use your ngrok URL
   
   async getFeaturedTokens(limit = 10, offset = 0): Promise<PumpToken[]> {
     try {
-      const response = await axios.get(`${this.apiUrl}/coins/king-of-the-hill`, {
-        params: { limit, offset, includeNsfw: false },
+      // Call YOUR backend endpoint
+      const response = await axios.get(`${this.apiUrl}/tokens/featured`, {
+        params: { limit, offset },
       });
-      return response.data || [];
+      return response.data.data || response.data || [];
     } catch (error) {
       console.error('Failed to fetch featured tokens:', error);
       return [];
@@ -63,16 +65,11 @@ class PumpFunApiService {
   
   async getTrendingTokens(limit = 20, offset = 0): Promise<PumpToken[]> {
     try {
-      const response = await axios.get(`${this.apiUrl}/coins`, {
-        params: {
-          limit,
-          offset,
-          sort: 'usd_market_cap',
-          order: 'DESC',
-          includeNsfw: false,
-        },
+      // Call YOUR backend endpoint
+      const response = await axios.get(`${this.apiUrl}/tokens/trending`, {
+        params: { limit, offset },
       });
-      return response.data || [];
+      return response.data.data || response.data || [];
     } catch (error) {
       console.error('Failed to fetch trending tokens:', error);
       return [];
@@ -81,16 +78,11 @@ class PumpFunApiService {
   
   async getNewTokens(limit = 20, offset = 0): Promise<PumpToken[]> {
     try {
-      const response = await axios.get(`${this.apiUrl}/coins`, {
-        params: {
-          limit,
-          offset,
-          sort: 'created_timestamp',
-          order: 'DESC',
-          includeNsfw: false,
-        },
+      // Call YOUR backend endpoint
+      const response = await axios.get(`${this.apiUrl}/tokens/new`, {
+        params: { limit, offset },
       });
-      return response.data || [];
+      return response.data.data || response.data || [];
     } catch (error) {
       console.error('Failed to fetch new tokens:', error);
       return [];
@@ -99,10 +91,11 @@ class PumpFunApiService {
   
   async searchTokens(query: string): Promise<PumpToken[]> {
     try {
-      const response = await axios.get(`${this.apiUrl}/search/coins`, {
-        params: { query, limit: 20 },
+      // Call YOUR backend endpoint
+      const response = await axios.get(`${this.apiUrl}/tokens/search`, {
+        params: { q: query, limit: 20 },
       });
-      return response.data || [];
+      return response.data.data || response.data || [];
     } catch (error) {
       console.error('Failed to search tokens:', error);
       return [];
@@ -111,8 +104,9 @@ class PumpFunApiService {
   
   async getTokenDetails(mint: string): Promise<PumpToken | null> {
     try {
-      const response = await axios.get(`${this.apiUrl}/coins/${mint}`);
-      return response.data;
+      // Call YOUR backend endpoint
+      const response = await axios.get(`${this.apiUrl}/tokens/${mint}`);
+      return response.data.data || response.data;
     } catch (error) {
       console.error('Failed to fetch token details:', error);
       return null;
@@ -121,10 +115,11 @@ class PumpFunApiService {
   
   async getTokenTrades(mint: string, limit = 100, offset = 0): Promise<TokenTrade[]> {
     try {
-      const response = await axios.get(`${this.apiUrl}/trades/coin/${mint}`, {
+      // Call YOUR backend endpoint
+      const response = await axios.get(`${this.apiUrl}/tokens/${mint}/trades`, {
         params: { limit, offset },
       });
-      return response.data || [];
+      return response.data.data || response.data || [];
     } catch (error) {
       console.error('Failed to fetch token trades:', error);
       return [];
