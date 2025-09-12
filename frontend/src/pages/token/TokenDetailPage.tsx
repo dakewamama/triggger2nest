@@ -52,8 +52,11 @@ export default function TokenDetailPage() {
     setTxLoading(true);
     try {
       await pumpService.buyToken({
-        mintAddress,
-        amountSol: parseFloat(buyAmount),
+        mint: mintAddress,               // ✅ fixed
+        amount: 0,                       // if you want token amount, keep 0
+        solAmount: parseFloat(buyAmount),// ✅ correct param name
+        slippage: 1,
+        priorityFee: 0.00001,
       });
       setBuyAmount('');
       // Refresh data
@@ -72,8 +75,10 @@ export default function TokenDetailPage() {
     setTxLoading(true);
     try {
       await pumpService.sellToken({
-        mintAddress,
-        amountTokens: parseFloat(sellAmount),
+        mint: mintAddress,                // ✅ fixed
+        amount: parseFloat(sellAmount),   // ✅ correct param name
+        slippage: 1,
+        priorityFee: 0.00001,
       });
       setSellAmount('');
       // Refresh data

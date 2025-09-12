@@ -1,40 +1,5 @@
-import { Controller, Get, Post, Body, Param, Query, Logger, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Query, Param, Logger } from '@nestjs/common';
 import { TokensService } from './tokens.service';
-
-export interface PumpFunToken {
-  marketCap: number;
-  volume24h: number;
-  priceChange24h: number;
-  price?: number;
-  mint: string;
-  name: string;
-  symbol: string;
-  description: string;
-  image: string;
-  created_timestamp: number;
-  raydium_pool?: string;
-  complete: boolean;
-  virtual_sol_reserves: number;
-  virtual_token_reserves: number;
-  total_supply: number;
-  website?: string;
-  telegram?: string;
-  twitter?: string;
-  bonding_curve: string;
-  associated_bonding_curve: string;
-  creator: string;
-  market_cap: number;
-  reply_count: number;
-  last_reply: number;
-  nsfw: boolean;
-  market_id?: string;
-  inverted?: boolean;
-  is_currently_live: boolean;
-  king_of_the_hill_timestamp?: number;
-  show_name: boolean;
-  last_trade_timestamp: number;
-  usd_market_cap: number;
-}
 
 @Controller('tokens')
 export class TokensController {
@@ -43,132 +8,376 @@ export class TokensController {
   constructor(private readonly tokensService: TokensService) {}
 
   @Get('health')
-  getHealth() {
-    return { 
-      status: 'ok', 
-      timestamp: new Date().toISOString(),
-      service: 'tokens'
-    };
+  async getServiceHealth() {
+    try {
+      // Test the service by fetching a small number of tokens
+      const result = await this.tokensService.getTrendingTokens(1, 0);
+      
+      return {
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        service: 'tokens-service',
+        externalApi: {
+          pumpFun: result.data.length > 0 ? 'connected' : 'limited',
+          dataCount: result.data.length
+        }
+      };
+    } catch (error) {
+      this.logger.error('Tokens service health check failed:', error);
+      return {
+        status: 'error',
+        timestamp: new Date().toISOString(),
+        service: 'tokens-service',
+        error: error.message
+      };
+    }
+  }
+
+  @Get('featured')
+  async getFeaturedTokens(
+    @Query('limit') limit = 20,
+    @Query('offset') offset = 0,
+  ) {
+    try {
+      this.logger.log(`Fetching featured tokens - limit: ${limit}, offset: ${offset}`);
+      
+      const result = await this.tokensService.getFeaturedTokens(Number(limit), Number(offset));
+      
+      this.logger.log(`Returned ${result.data.length} featured tokens`);
+      
+      return {
+        success: true,
+        data: result.data,
+        pagination: {
+          limit: Number(limit),
+          offset: Number(offset),
+          total: result.data.length,
+        },
+      };
+    } catch (error) {
+      this.logger.error('Failed to fetch featured tokens:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch featured tokens',
+        data: [],
+      };
+    }
   }
 
   @Get('trending')
   async getTrendingTokens(
-    @Query('limit') limit?: number,
-    @Query('offset') offset?: number,
+    @Query('limit') limit = 50,
+    @Query('offset') offset = 0,
   ) {
     try {
-      this.logger.log(`Fetching trending tokens with limit: ${limit || 50}, offset: ${offset || 0}`);
+      this.logger.log(`Fetching trending tokens - limit: ${limit}, offset: ${offset}`);
       
-      const tokens = await this.tokensService.getTrendingTokens({
-        limit: limit || 50,
-        offset: offset || 0,
-      });
-
+      const result = await this.tokensService.getTrendingTokens(Number(limit), Number(offset));
+      
+      this.logger.log(`Returned ${result.data.length} trending tokens`);
+      
       return {
         success: true,
-        data: tokens,
-        count: tokens.length,
-        timestamp: new Date().toISOString(),
+        data: result.data,
+        pagination: {
+          limit: Number(limit),
+          offset: Number(offset),
+          total: result.data.length,
+        },
       };
     } catch (error) {
-      this.logger.error('Error fetching trending tokens:', error);
-      throw new HttpException(
-        {
-          success: false,
-          message: 'Failed to fetch trending tokens',
-          error: error.message,
+      this.logger.error('Failed to fetch trending tokens:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch trending tokens',
+        data: [],
+      };
+    }
+  }
+
+  @Get('new')
+  async getNewTokens(
+    @Query('limit') limit = 50,
+    @Query('offset') offset = 0,
+  ) {
+    try {
+      this.logger.log(`Fetching new tokens - limit: ${limit}, offset: ${offset}`);
+      
+      const result = await this.tokensService.getNewTokens(Number(limit), Number(offset));
+      
+      this.logger.log(`Returned ${result.data.length} new tokens`);
+      
+      return {
+        success: true,
+        data: result.data,
+        pagination: {
+          limit: Number(limit),
+          offset: Number(offset),
+          total: result.data.length,
         },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      };
+    } catch (error) {
+      this.logger.error('Failed to fetch new tokens:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch new tokens',
+        data: [],
+      };
     }
   }
 
   @Get('search')
-  async searchTokens(@Query('q') query: string) {
+  async searchTokens(@Query('q') query: string, @Query('limit') limit = 20) {
     try {
       if (!query || query.trim().length === 0) {
-        throw new HttpException('Query parameter is required', HttpStatus.BAD_REQUEST);
+        return {
+          success: false,
+          error: 'Query parameter is required',
+          data: [],
+        };
       }
 
-      this.logger.log(`Searching tokens with query: ${query}`);
-      const tokens = await this.tokensService.searchTokens(query);
-
+      this.logger.log(`Searching tokens with query: "${query}" - limit: ${limit}`);
+      
+      const result = await this.tokensService.searchTokens(query.trim(), Number(limit));
+      
+      this.logger.log(`Found ${result.data.length} tokens for query: "${query}"`);
+      
       return {
         success: true,
-        data: tokens,
-        query,
-        count: tokens.length,
-        timestamp: new Date().toISOString(),
+        data: result.data,
+        query: query.trim(),
+        pagination: {
+          limit: Number(limit),
+          total: result.data.length,
+        },
       };
     } catch (error) {
-      this.logger.error('Error searching tokens:', error);
-      throw new HttpException(
-        {
-          success: false,
-          message: 'Failed to search tokens',
-          error: error.message,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      this.logger.error('Failed to search tokens:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to search tokens',
+        data: [],
+      };
     }
   }
 
-  @Get(':mintAddress')
-  async getTokenDetails(@Param('mintAddress') mintAddress: string) {
+  @Get(':mint')
+  async getTokenByMint(@Param('mint') mint: string) {
     try {
-      this.logger.log(`Fetching token details for: ${mintAddress}`);
-      
-      const token = await this.tokensService.getTokenByMint(mintAddress);
-      
-      if (!token) {
-        throw new HttpException('Token not found', HttpStatus.NOT_FOUND);
+      if (!mint || mint.trim().length === 0) {
+        return {
+          success: false,
+          error: 'Mint address is required',
+          data: null,
+        };
       }
 
-      return {
-        success: true,
-        data: token,
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
-      this.logger.error(`Error fetching token ${mintAddress}:`, error);
+      this.logger.log(`Fetching token details for mint: ${mint}`);
       
-      if (error instanceof HttpException) {
-        throw error;
-      }
+      const result = await this.tokensService.getTokenDetails(mint.trim());
       
-      throw new HttpException(
-        {
+      if (result.data) {
+        this.logger.log(`Found token: ${result.data.name || 'Unknown'}`);
+        return {
+          success: true,
+          data: result.data,
+        };
+      } else {
+        this.logger.log(`Token not found for mint: ${mint}`);
+        return {
           success: false,
-          message: 'Failed to fetch token details',
-          error: error.message,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+          error: 'Token not found',
+          data: null,
+        };
+      }
+    } catch (error) {
+      this.logger.error(`Failed to fetch token ${mint}:`, error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch token details',
+        data: null,
+      };
     }
   }
 
-  @Get('stats/overview')
-  async getMarketOverview() {
+  @Get(':mint/trades')
+  async getTokenTrades(
+    @Param('mint') mint: string,
+    @Query('limit') limit = 50,
+    @Query('offset') offset = 0,
+  ) {
     try {
-      this.logger.log('Fetching market overview');
+      if (!mint || mint.trim().length === 0) {
+        return {
+          success: false,
+          error: 'Mint address is required',
+          data: [],
+        };
+      }
+
+      this.logger.log(`Fetching trades for token: ${mint} - limit: ${limit}, offset: ${offset}`);
       
-      const stats = await this.tokensService.getMarketStats();
+      const result = await this.tokensService.getTokenTrades(mint.trim(), Number(limit), Number(offset));
+      
+      this.logger.log(`Found ${result.data.length} trades for token: ${mint}`);
       
       return {
         success: true,
-        data: stats,
-        timestamp: new Date().toISOString(),
+        data: result.data,
+        mint: mint.trim(),
+        pagination: {
+          limit: Number(limit),
+          offset: Number(offset),
+          total: result.data.length,
+        },
       };
     } catch (error) {
-      this.logger.error('Error fetching market overview:', error);
-      throw new HttpException(
-        {
-          success: false,
-          message: 'Failed to fetch market overview',
-          error: error.message,
+      this.logger.error(`Failed to fetch trades for token ${mint}:`, error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch token trades',
+        data: [],
+      };
+    }
+  }
+
+  @Get('trades/latest')
+  async getLatestTrades(@Query('limit') limit = 100) {
+    try {
+      this.logger.log(`Fetching latest trades - limit: ${limit}`);
+      
+      const result = await this.tokensService.getLatestTrades(Number(limit));
+      
+      this.logger.log(`Found ${result.data.length} latest trades`);
+      
+      return {
+        success: true,
+        data: result.data,
+        pagination: {
+          limit: Number(limit),
+          total: result.data.length,
         },
-        HttpStatus.INTERNAL_SERVER_ERROR,
+      };
+    } catch (error) {
+      this.logger.error('Failed to fetch latest trades:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch latest trades',
+        data: [],
+      };
+    }
+  }
+
+  @Get('stats/market')
+  async getMarketStats() {
+    try {
+      this.logger.log('Fetching market statistics');
+      
+      const result = await this.tokensService.getMarketStats();
+      
+      this.logger.log('Market stats calculated successfully');
+      
+      return {
+        success: true,
+        data: result.data,
+      };
+    } catch (error) {
+      this.logger.error('Failed to fetch market stats:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch market stats',
+        data: {
+          totalMarketCap: 0,
+          totalVolume24h: 0,
+          activeTokens: 0,
+          successfulGraduations: 0,
+          totalTokens: 0,
+        },
+      };
+    }
+  }
+
+  @Get('price/sol')
+  async getSolPrice() {
+    try {
+      this.logger.log('Fetching SOL price');
+      
+      const result = await this.tokensService.getSolPrice();
+      
+      this.logger.log(`SOL price: $${result.data.price}`);
+      
+      return {
+        success: true,
+        data: result.data,
+      };
+    } catch (error) {
+      this.logger.error('Failed to fetch SOL price:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch SOL price',
+        data: { price: 0 },
+      };
+    }
+  }
+
+  @Get('analytics/dashboard')
+  async getDashboardData() {
+    try {
+      this.logger.log('Fetching dashboard analytics data');
+      
+      // Fetch multiple data sources concurrently
+      const [featuredResult, trendingResult, newResult] = await Promise.all([
+        this.tokensService.getFeaturedTokens(10),
+        this.tokensService.getTrendingTokens(20),
+        this.tokensService.getNewTokens(20),
+      ]);
+
+      const totalFeatured = featuredResult.data.length;
+      const totalTrending = trendingResult.data.length;
+      const totalNew = newResult.data.length;
+      
+      // Combine unique tokens
+      const allTokens = [...featuredResult.data, ...trendingResult.data];
+      const uniqueTokens = allTokens.filter((token, index, arr) => 
+        arr.findIndex(t => t.mint === token.mint) === index
       );
+
+      const analytics = {
+        featuredTokens: featuredResult.data,
+        trendingTokens: trendingResult.data,
+        newTokens: newResult.data,
+        summary: {
+          totalFeatured,
+          totalTrending,
+          totalNew,
+          totalUnique: uniqueTokens.length,
+        },
+      };
+
+      this.logger.log(`Dashboard data prepared: ${totalFeatured} featured, ${totalTrending} trending, ${totalNew} new`);
+      
+      return {
+        success: true,
+        data: analytics,
+      };
+    } catch (error) {
+      this.logger.error('Failed to fetch dashboard data:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch dashboard data',
+        data: {
+          featuredTokens: [],
+          trendingTokens: [],
+          newTokens: [],
+          summary: {
+            totalFeatured: 0,
+            totalTrending: 0,
+            totalNew: 0,
+            totalUnique: 0,
+          },
+        },
+      };
     }
   }
 }

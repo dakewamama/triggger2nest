@@ -5,5 +5,6 @@ import { PumpService } from './pump.service';
 @Module({
   controllers: [PumpController],
   providers: [PumpService],
+  exports: [PumpService],
 })
 export class PumpModule {}

@@ -1,316 +1,289 @@
+// src/pump/pump.service.ts
 import { Injectable, Logger } from '@nestjs/common';
-import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { ConfigService } from '@nestjs/config';
-import { DEFAULT_DECIMALS, PumpFunSDK } from 'pumpdotfun-sdk';
-import { AnchorProvider } from '@coral-xyz/anchor';
-// Fixed NodeWallet import problem
-import NodeWallet from '@coral-xyz/anchor/dist/cjs/nodewallet';
-import { CreateTokenDto, BuyTokenDto, SellTokenDto } from './dto/pump.dto';
-import * as fs from 'fs';
+import { CreateTokenDto } from './dto/create-token.dto';
+import { BuyTokenDto } from './dto/buy-token.dto';
+import { SellTokenDto } from './dto/sell-token.dto';
+import axios from 'axios';
+
+export interface TokenResponse {
+  success: boolean;
+  signature?: string;
+  error?: string;
+  data?: any;
+}
 
 @Injectable()
 export class PumpService {
   private readonly logger = new Logger(PumpService.name);
-  private connection: Connection;
-  private payer: Keypair;
-  private provider: AnchorProvider;
-  private pumpFunSdk: PumpFunSDK;
-  private readonly rpcUrl: string;
-  private readonly programId: PublicKey;
+  
+  // PumpPortal API for real trading
+  private readonly PUMPPORTAL_BASE = 'https://pumpportal.fun/api';
+  
+  // Official pump.fun API for token info
+  private readonly PUMP_API_BASE = 'https://frontend-api.pump.fun';
 
-  constructor(private configService: ConfigService) {
-    //boggey the connection to soL RPC
-    this.rpcUrl = this.configService.get<string>('SOLANA_RPC_URL') || 'https://api.devnet.solana.com';
-    this.connection = new Connection(this.rpcUrl, 'confirmed');
-
-    // Set the correct program ID
-    this.programId = new PublicKey(
-      this.configService.get<string>('PUMP_PROGRAM_ID') ||
-        '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'
-    );
-
-    // Load or generate payer keypair
-    const privateKey = this.configService.get<string>('SOLANA_PRIVATE_KEY');
-    if (!privateKey) {
-      this.logger.error('SOLANA_PRIVATE_KEY not set; generating a random keypair (dev only).');
-      this.payer = Keypair.generate();
-    } else {
-      try {
-        const secret = JSON.parse(privateKey);
-        this.payer = Keypair.fromSecretKey(new Uint8Array(secret));
-        this.logger.log(`Wallet loaded: ${this.payer.publicKey.toBase58()}`);
-      } catch (err) {
-        this.logger.error('Failed to parse SOLANA_PRIVATE_KEY; generating random keypair', err);
-        this.payer = Keypair.generate();
-        this.logger.log(`Generated dev Wallet: ${this.payer.publicKey.toBase58()}`);
-      }
-    }
-
-    // Anchor provider
-    const wallet = new NodeWallet(this.payer);
-    this.provider = new AnchorProvider(this.connection, wallet, {
-      commitment: 'confirmed',
-      preflightCommitment: 'confirmed',
-    });
-
-    // Initialize PumpFunSDK (it uses default program ID internally)
-    this.pumpFunSdk = new PumpFunSDK(this.provider);
-    this.logger.log(`Using Pump.fun program: ${this.programId.toBase58()}`);
-  }
-
-  // Helper method to convert Buffer to Blob safely
-  private bufferToBlob(buffer: Buffer): Blob {
-    const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
-    return new Blob([arrayBuffer]);
-  }
-
-  async createToken(
-    data: CreateTokenDto,
-    buyAmountSol: number = 0.001,
-    imageFile?: Buffer,
-    imageFilePath?: string
-  ): Promise<any> {
-    this.logger.log(`Attempting to create token: ${data.name} (${data.symbol})`);
+  async createToken(createTokenDto: CreateTokenDto, imageFile?: any): Promise<TokenResponse> {
     try {
-      const balance = await this.connection.getBalance(this.payer.publicKey);
-      const balanceInSol = balance / LAMPORTS_PER_SOL;
-      if (balanceInSol < buyAmountSol + 0.01) {
-        throw new Error(`Insufficient SOL: need ${buyAmountSol + 0.01}, have ${balanceInSol}`);
+      this.logger.log('Creating token with real pump.fun API:', createTokenDto);
+      
+      // Note: Token creation requires connecting to pump.fun directly through their web interface
+      // or using their smart contract. This is a complex operation that typically requires:
+      // 1. Wallet connection
+      // 2. Transaction signing
+      // 3. Image upload to IPFS
+      // 4. Metadata creation
+      
+      // For now, we'll prepare the transaction data that would be used
+      const tokenData = {
+        name: createTokenDto.name,
+        symbol: createTokenDto.symbol,
+        description: createTokenDto.description,
+        website: createTokenDto.website,
+        twitter: createTokenDto.twitter,
+        telegram: createTokenDto.telegram,
+      };
+
+      if (imageFile) {
+        this.logger.log('Image file received:', imageFile.originalname || 'unknown');
+        // Handle image upload logic here when wallet integration is added
       }
 
-      const mint = Keypair.generate();
-      this.logger.log(`Generated mint: ${mint.publicKey.toBase58()}`);
+      this.logger.log('Token creation prepared. Real implementation requires wallet integration.');
+      
+      // In a real implementation, you would:
+      // 1. Upload image to IPFS
+      // 2. Create metadata JSON
+      // 3. Use Solana SDK to create the token
+      // 4. Submit to pump.fun bonding curve
+      
+      return {
+        success: false,
+        error: 'Token creation requires wallet integration and frontend transaction signing. Use the pump.fun website directly.',
+        data: tokenData
+      };
+    } catch (error) {
+      this.logger.error('Failed to create token:', error);
+      return {
+        success: false,
+        error: error.message || 'Token creation failed'
+      };
+    }
+  }
 
-      const [creatorVault] = await PublicKey.findProgramAddress(
-        [Buffer.from('creator_vault'), this.payer.publicKey.toBuffer(), mint.publicKey.toBuffer()],
-        this.programId
-      );
-      this.logger.log(`Expected creator vault: ${creatorVault.toBase58()}`);
+  async buyToken(buyTokenDto: BuyTokenDto): Promise<TokenResponse> {
+    try {
+      this.logger.log('Initiating real token buy via PumpPortal:', buyTokenDto);
+      
+      // Check if wallet is connected
+      if (!buyTokenDto.publicKey || buyTokenDto.publicKey === 'wallet_not_connected') {
+        return {
+          success: false,
+          error: 'Wallet not connected. Please connect your wallet to trade tokens.'
+        };
+      }
 
-      let fileBuffer: Buffer | undefined = imageFile;
-      if (!fileBuffer && imageFilePath) {
-        try {
-          fileBuffer = await fs.promises.readFile(imageFilePath);
-        } catch {
-          this.logger.warn('Failed to read image file, using empty buffer');
-          fileBuffer = Buffer.alloc(0);
+      // Use PumpPortal for real trading
+      const tradeData = {
+        publicKey: buyTokenDto.publicKey,
+        action: 'buy',
+        mint: buyTokenDto.mint,
+        denominatedInSol: true, // Amount is in SOL
+        amount: buyTokenDto.solAmount, // Amount of SOL to spend
+        slippage: buyTokenDto.slippage || 1, // 1% slippage
+        priorityFee: buyTokenDto.priorityFee || 0.00001,
+        pool: 'pump' // Trading on pump.fun
+      };
+
+      const response = await axios.post(`${this.PUMPPORTAL_BASE}/trade-local`, tradeData, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 30000,
+      });
+
+      if (response.data) {
+        this.logger.log('Trade transaction prepared successfully');
+        
+        return {
+          success: true,
+          data: {
+            transaction: response.data, // Serialized transaction to sign
+            mint: buyTokenDto.mint,
+            amount: buyTokenDto.amount,
+            solAmount: buyTokenDto.solAmount,
+            action: 'buy'
+          }
+        };
+      } else {
+        throw new Error('No transaction data received');
+      }
+    } catch (error) {
+      this.logger.error('Failed to buy token:', error);
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || 'Buy failed'
+      };
+    }
+  }
+
+  async sellToken(sellTokenDto: SellTokenDto): Promise<TokenResponse> {
+    try {
+      this.logger.log('Initiating real token sell via PumpPortal:', sellTokenDto);
+      
+      // Check if wallet is connected
+      if (!sellTokenDto.publicKey || sellTokenDto.publicKey === 'wallet_not_connected') {
+        return {
+          success: false,
+          error: 'Wallet not connected. Please connect your wallet to trade tokens.'
+        };
+      }
+      
+      const tradeData = {
+        publicKey: sellTokenDto.publicKey,
+        action: 'sell',
+        mint: sellTokenDto.mint,
+        denominatedInSol: false, // Amount is in tokens
+        amount: sellTokenDto.amount, // Number of tokens to sell (or "100%" for all)
+        slippage: sellTokenDto.slippage || 1,
+        priorityFee: sellTokenDto.priorityFee || 0.00001,
+        pool: 'pump'
+      };
+
+      const response = await axios.post(`${this.PUMPPORTAL_BASE}/trade-local`, tradeData, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 30000,
+      });
+
+      if (response.data) {
+        this.logger.log('Sell transaction prepared successfully');
+        
+        return {
+          success: true,
+          data: {
+            transaction: response.data, // Serialized transaction to sign
+            mint: sellTokenDto.mint,
+            amount: sellTokenDto.amount,
+            action: 'sell'
+          }
+        };
+      } else {
+        throw new Error('No transaction data received');
+      }
+    } catch (error) {
+      this.logger.error('Failed to sell token:', error);
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || 'Sell failed'
+      };
+    }
+  }
+
+  async getTokenInfo(mintAddress: string): Promise<TokenResponse> {
+    try {
+      this.logger.log('Fetching real token info for:', mintAddress);
+      
+      const response = await axios.get(`${this.PUMP_API_BASE}/coins/${mintAddress}`, {
+        timeout: 10000,
+      });
+
+      if (response.data) {
+        this.logger.log(`Fetched token info: ${response.data.name || 'Unknown'}`);
+        
+        return {
+          success: true,
+          data: response.data
+        };
+      } else {
+        throw new Error('Token not found');
+      }
+    } catch (error) {
+      this.logger.error(`Failed to get token info for ${mintAddress}:`, error);
+      return {
+        success: false,
+        error: error.response?.status === 404 ? 'Token not found' : 'Failed to get token info'
+      };
+    }
+  }
+
+  async getQuote(mint: string, amount: number, action: 'buy' | 'sell'): Promise<TokenResponse> {
+    try {
+      this.logger.log(`Getting quote for ${action} ${amount} of ${mint}`);
+      
+      // Get current token info for price calculation
+      const tokenInfo = await this.getTokenInfo(mint);
+      if (!tokenInfo.success || !tokenInfo.data) {
+        throw new Error('Could not fetch token info for quote');
+      }
+
+      const token = tokenInfo.data;
+      const { virtual_sol_reserves, virtual_token_reserves } = token;
+      
+      // Calculate estimated price based on bonding curve
+      let estimatedPrice = 0;
+      if (virtual_token_reserves > 0) {
+        estimatedPrice = virtual_sol_reserves / virtual_token_reserves;
+      }
+
+      const quote = {
+        mint,
+        action,
+        amount,
+        estimatedPrice,
+        estimatedSolAmount: action === 'buy' ? amount : amount * estimatedPrice,
+        estimatedTokenAmount: action === 'buy' ? amount / estimatedPrice : amount,
+        virtualSolReserves: virtual_sol_reserves,
+        virtualTokenReserves: virtual_token_reserves,
+        timestamp: Date.now(),
+      };
+
+      this.logger.log('Quote calculated:', quote);
+      
+      return {
+        success: true,
+        data: quote
+      };
+    } catch (error) {
+      this.logger.error('Failed to get quote:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to get quote'
+      };
+    }
+  }
+
+  async healthCheck() {
+    try {
+      // Test connection to pump.fun API
+      const response = await axios.get(`${this.PUMP_API_BASE}/coins`, {
+        params: { limit: 1 },
+        timeout: 5000,
+      });
+
+      const isHealthy = response.status === 200;
+      
+      return {
+        status: isHealthy ? 'ok' : 'error',
+        timestamp: new Date().toISOString(),
+        service: 'pump-service',
+        externalApi: {
+          pumpFun: isHealthy ? 'connected' : 'disconnected',
+          pumpPortal: 'available' // PumpPortal doesn't have a health endpoint
         }
-      }
-
-      const fileBlob = fileBuffer && fileBuffer.length > 0 ? this.bufferToBlob(fileBuffer) : new Blob();
-
-      const tokenMetadata = {
-        name: data.name,
-        symbol: data.symbol,
-        description: data.description || '',
-        file: fileBlob,
       };
-
-      const buyLamports = BigInt(Math.floor(buyAmountSol * LAMPORTS_PER_SOL));
-      const slippage = 500n;
-
-      const computeBudgetOpts = {
-        unitLimit: 300000,
-        unitPrice: 1000000,
+    } catch (error) {
+      this.logger.error('Health check failed:', error);
+      return {
+        status: 'error',
+        timestamp: new Date().toISOString(),
+        service: 'pump-service',
+        error: error.message,
+        externalApi: {
+          pumpFun: 'disconnected',
+          pumpPortal: 'unknown'
+        }
       };
-
-      const result = await this.pumpFunSdk.createAndBuy(
-        this.payer,
-        mint,
-        tokenMetadata,
-        buyLamports,
-        slippage,
-        computeBudgetOpts
-      );
-
-      if (result.success) {
-        return {
-          success: true,
-          signature: result.signature,
-          mintAddress: mint.publicKey.toBase58(),
-          pumpUrl: `https://pump.fun/${mint.publicKey.toBase58()}`,
-          creatorVault: creatorVault.toBase58(),
-        };
-      } else {
-        this.logger.error('CreateAndBuy failed:', result.error);
-        throw new Error(`Token creation failed: ${result.error}`);
-      }
-    } catch (error) {
-      this.logger.error('Error in createToken:', error);
-
-      if (error.message.includes('ConstraintSeeds')) {
-        throw new Error('PDA seed constraint violation: verify program ID and account derivation');
-      } else if (error.message.includes('0x7d6')) {
-        throw new Error('Anchor constraint violation: check account seeds and program ID');
-      } else {
-        throw new Error(`Token creation failed: ${error.message}`);
-      }
     }
-  }
-
-  async createTokenOnly(data: CreateTokenDto, imageFile?: Buffer): Promise<any> {
-    this.logger.log(`Creating token with minimal buy: ${data.name} (${data.symbol})`);
-    try {
-      const mint = Keypair.generate();
-      const fileBlob = imageFile && imageFile.length > 0 ? this.bufferToBlob(imageFile) : new Blob();
-
-      const tokenMetadata = {
-        name: data.name,
-        symbol: data.symbol,
-        description: data.description || '',
-        file: fileBlob,
-      };
-
-      const minimalBuyLamports = BigInt(Math.floor(0.0001 * LAMPORTS_PER_SOL));
-      const slippage = 500n;
-      const computeBudgetOpts = { unitLimit: 200000, unitPrice: 1000000 };
-
-      const result = await this.pumpFunSdk.createAndBuy(
-        this.payer,
-        mint,
-        tokenMetadata,
-        minimalBuyLamports,
-        slippage,
-        computeBudgetOpts
-      );
-
-      if (result.success) {
-        return {
-          success: true,
-          signature: result.signature,
-          mintAddress: mint.publicKey.toBase58(),
-          pumpUrl: `https://pump.fun/${mint.publicKey.toBase58()}`,
-        };
-      } else {
-        throw new Error(`Token creation failed: ${result.error}`);
-      }
-    } catch (error) {
-      this.logger.error('Error in createTokenOnly:', error);
-      throw new Error(`Token creation failed: ${error.message}`);
-    }
-  }
-
-  async buyToken(data: BuyTokenDto): Promise<any> {
-    this.logger.log(`Attempting to buy ${data.amountSol} SOL of ${data.mintAddress}`);
-    try {
-      const balance = await this.connection.getBalance(this.payer.publicKey);
-      const balanceInSol = balance / LAMPORTS_PER_SOL;
-      if (balanceInSol < data.amountSol + 0.01) {
-        throw new Error(`Insufficient SOL: need ${data.amountSol + 0.01}, have ${balanceInSol}`);
-      }
-
-      const mint = new PublicKey(data.mintAddress);
-      const buyLamports = BigInt(Math.floor(data.amountSol * LAMPORTS_PER_SOL));
-      const slippage = 500n;
-      const computeBudgetOpts = { unitLimit: 300000, unitPrice: 1000000 };
-
-      const bondingCurve = await this.getBondingCurve(data.mintAddress);
-      if (!bondingCurve) {
-        throw new Error('Token bonding curve not found - token may not exist on Pump.fun');
-      }
-
-      const result = await this.pumpFunSdk.buy(
-        this.payer,
-        mint,
-        buyLamports,
-        slippage,
-        computeBudgetOpts
-      );
-
-      if (result.success) {
-        return { success: true, signature: result.signature };
-      } else {
-        throw new Error(`Buy failed: ${result.error}`);
-      }
-    } catch (error) {
-      this.logger.error('Error in buyToken:', error.message);
-      throw new Error(error.message);
-    }
-  }
-
-  async sellToken(data: SellTokenDto): Promise<any> {
-    this.logger.log(`Attempting to sell ${data.amountTokens} of ${data.mintAddress}`);
-    try {
-      const mint = new PublicKey(data.mintAddress);
-      const sellAmount = BigInt(Math.floor(data.amountTokens * Math.pow(10, DEFAULT_DECIMALS)));
-      const slippage = 500n;
-      const computeBudgetOpts = { unitLimit: 300000, unitPrice: 1000000 };
-
-      const result = await this.pumpFunSdk.sell(
-        this.payer,
-        mint,
-        sellAmount,
-        slippage,
-        computeBudgetOpts
-      );
-
-      if (result.success) {
-        return { success: true, signature: result.signature };
-      } else {
-        throw new Error(`Sell failed: ${result.error}`);
-      }
-    } catch (error) {
-      this.logger.error('Error in sellToken:', error.message);
-      throw new Error(error.message);
-    }
-  }
-
-  async getTokenBalance(mintAddress: string): Promise<number> {
-    const mint = new PublicKey(mintAddress);
-    const { getAssociatedTokenAddress } = await import('@solana/spl-token');
-    const ata = await getAssociatedTokenAddress(mint, this.payer.publicKey);
-    try {
-      const bal = await this.connection.getTokenAccountBalance(ata);
-      return bal.value.uiAmount || 0;
-    } catch {
-      return 0;
-    }
-  }
-
-  async getBondingCurve(mintAddress: string): Promise<any> {
-    try {
-      const mint = new PublicKey(mintAddress);
-      return await this.pumpFunSdk.getBondingCurveAccount(mint);
-    } catch (error) {
-      this.logger.warn(`Failed to get bonding curve for ${mintAddress}:`, error.message);
-      return null;
-    }
-  }
-
-  async getGlobalAccount(): Promise<any> {
-    return this.pumpFunSdk.getGlobalAccount();
-  }
-
-  async getWalletBalance(): Promise<number> {
-    const bal = await this.connection.getBalance(this.payer.publicKey);
-    return bal / LAMPORTS_PER_SOL;
-  }
-
-  getWalletAddress(): string {
-    return this.payer.publicKey.toBase58();
-  }
-
-  async debugPDADerivation(mintAddress: string): Promise<any> {
-    const mint = new PublicKey(mintAddress);
-
-    const [creatorVault, creatorVaultBump] = await PublicKey.findProgramAddress(
-      [Buffer.from('creator_vault'), this.payer.publicKey.toBuffer(), mint.toBuffer()],
-      this.programId
-    );
-
-    const [bondingCurve, bondingCurveBump] = await PublicKey.findProgramAddress(
-      [Buffer.from('bonding_curve'), mint.toBuffer()],
-      this.programId
-    );
-
-    return {
-      mint: mint.toBase58(),
-      creator: this.payer.publicKey.toBase58(),
-      programId: this.programId.toBase58(),
-      creatorVault: creatorVault.toBase58(),
-      creatorVaultBump,
-      bondingCurve: bondingCurve.toBase58(),
-      bondingCurveBump,
-    };
   }
 }

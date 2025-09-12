@@ -1,223 +1,297 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Connection, PublicKey } from '@solana/web3.js';
-import { PumpFunToken } from './tokens.controller';
+import { Injectable, Logger } from '@nestjs/common';
+import axios from 'axios';
+
+export interface PumpFunToken {
+  mint: string;
+  name: string;
+  symbol: string;
+  description: string;
+  image_uri?: string;
+  metadata_uri?: string;
+  twitter?: string;
+  telegram?: string;
+  bonding_curve: string;
+  associated_bonding_curve: string;
+  creator: string;
+  created_timestamp: number;
+  raydium_pool?: string;
+  complete: boolean;
+  virtual_sol_reserves: number;
+  virtual_token_reserves: number;
+  total_supply: number;
+  website?: string;
+  show_name: boolean;
+  king_of_the_hill_timestamp?: number;
+  market_cap: number;
+  reply_count: number;
+  last_reply: number;
+  nsfw: boolean;
+  market_id?: string;
+  inverted?: boolean;
+  is_currently_live: boolean;
+  username?: string;
+  profile_image?: string;
+  usd_market_cap: number;
+  volume_24h?: number;
+  price_change_24h?: number;
+  price?: number;
+}
+
+export interface TokenTrade {
+  signature: string;
+  mint: string;
+  sol_amount: number;
+  token_amount: number;
+  is_buy: boolean;
+  user: string;
+  timestamp: number;
+  tx_index: number;
+  username?: string;
+  profile_image?: string;
+}
 
 @Injectable()
-export class TokensService implements OnModuleInit {
+export class TokensService {
   private readonly logger = new Logger(TokensService.name);
-  private connection: Connection;
+  
+  // Official pump.fun frontend API
+  private readonly PUMP_API_BASE = 'https://frontend-api.pump.fun';
+  // Alternative: https://frontend-api-v2.pump.fun or https://frontend-api-v3.pump.fun
+  
+  // PumpPortal for additional data
+  private readonly PUMPPORTAL_BASE = 'https://pumpportal.fun/api';
 
-  constructor(private configService: ConfigService) {}
-
-  async onModuleInit() {
+  async getFeaturedTokens(limit = 20, offset = 0): Promise<{ data: PumpFunToken[] }> {
     try {
-      // Initialize Solana connection
-      const rpcUrl = this.configService.get<string>('SOLANA_RPC_URL') || 'https://api.mainnet-beta.solana.com';
-      this.connection = new Connection(rpcUrl, 'confirmed');
+      this.logger.log(`Fetching featured tokens (King of the Hill) - limit: ${limit}, offset: ${offset}`);
       
-      this.logger.log('✅ TokensService initialized successfully');
-      this.logger.log(`🔗 Connected to Solana RPC: ${rpcUrl}`);
+      const response = await axios.get(`${this.PUMP_API_BASE}/coins/king-of-the-hill`, {
+        params: {
+          offset,
+          limit,
+          includeNsfw: false,
+        },
+        timeout: 10000,
+      });
+
+      const tokens = response.data || [];
+      this.logger.log(`Fetched ${tokens.length} featured tokens`);
       
-      // Test connection
-      const slot = await this.connection.getSlot();
-      this.logger.log(`📊 Current Solana slot: ${slot}`);
-      
+      return { data: tokens };
     } catch (error) {
-      this.logger.error('❌ Failed to initialize TokensService:', error);
-      throw error;
+      this.logger.error('Failed to fetch featured tokens:', error.message);
+      return { data: [] };
     }
   }
 
-  async getTrendingTokens(options: { limit?: number; offset?: number } = {}): Promise<PumpFunToken[]> {
+  async getTrendingTokens(limit = 50, offset = 0): Promise<{ data: PumpFunToken[] }> {
     try {
-      const { limit = 50, offset = 0 } = options;
+      this.logger.log(`Fetching trending tokens - limit: ${limit}, offset: ${offset}`);
       
-      this.logger.log(`Fetching trending tokens (limit: ${limit}, offset: ${offset})`);
-      
-      // Fetch from pump.fun API
-      const response = await fetch(`https://frontend-api.pump.fun/coins?offset=${offset}&limit=${limit}&sort=created_timestamp&order=DESC&includeNsfw=false`);
-      
-      if (!response.ok) {
-        throw new Error(`Pump.fun API error: ${response.status} ${response.statusText}`);
-      }
-      
-      const tokens: PumpFunToken[] = await response.json();
-      
-      // Process and format tokens
-      const processedTokens = tokens.map(token => ({
-        ...token,
-        // Calculate additional metrics
-        price: this.calculateTokenPrice(token),
-        priceChange24h: Math.random() * 20 - 10, // Mock for now
-        volume24h: token.virtual_sol_reserves * 0.1,
-        marketCap: token.usd_market_cap || 0,
-      }));
-      
-      this.logger.log(`✅ Fetched ${processedTokens.length} trending tokens`);
-      return processedTokens;
-      
-    } catch (error) {
-      this.logger.error('Error fetching trending tokens:', error);
-      
-      // Return mock data as fallback
-      return this.getMockTokens();
-    }
-  }
+      const response = await axios.get(`${this.PUMP_API_BASE}/coins`, {
+        params: {
+          offset,
+          limit,
+          sort: 'market_cap',
+          order: 'DESC',
+          includeNsfw: false,
+        },
+        timeout: 10000,
+      });
 
-  async searchTokens(query: string): Promise<PumpFunToken[]> {
-    try {
-      this.logger.log(`Searching tokens with query: "${query}"`);
+      const tokens = response.data || [];
+      this.logger.log(`Fetched ${tokens.length} trending tokens`);
       
-      // Search in pump.fun
-      const response = await fetch(`https://frontend-api.pump.fun/search/coins?q=${encodeURIComponent(query)}&limit=20`);
-      
-      if (!response.ok) {
-        throw new Error(`Search API error: ${response.status}`);
-      }
-      
-      const tokens: PumpFunToken[] = await response.json();
-      
-      const processedTokens = tokens.map(token => ({
-        ...token,
-        price: this.calculateTokenPrice(token),
-        priceChange24h: Math.random() * 20 - 10,
-        volume24h: token.virtual_sol_reserves * 0.1,
-        marketCap: token.usd_market_cap || 0,
-      }));
-      
-      this.logger.log(`✅ Found ${processedTokens.length} tokens for query: "${query}"`);
-      return processedTokens;
-      
+      return { data: tokens };
     } catch (error) {
-      this.logger.error('Error searching tokens:', error);
-      return [];
-    }
-  }
-
-  async getTokenByMint(mintAddress: string): Promise<PumpFunToken | null> {
-    try {
-      this.logger.log(`Fetching token details for mint: ${mintAddress}`);
+      this.logger.error('Failed to fetch trending tokens:', error.message);
       
-      // Validate mint address
+      // Fallback to latest coins if trending fails
       try {
-        new PublicKey(mintAddress);
-      } catch {
-        throw new Error('Invalid mint address format');
+        this.logger.log('Trying fallback to latest coins...');
+        return await this.getNewTokens(limit, offset);
+      } catch (fallbackError) {
+        this.logger.error('Fallback also failed:', fallbackError.message);
+        return { data: [] };
       }
-      
-      // Fetch from pump.fun API
-      const response = await fetch(`https://frontend-api.pump.fun/coins/${mintAddress}`);
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          return null;
-        }
-        throw new Error(`API error: ${response.status}`);
-      }
-      
-      const token: PumpFunToken = await response.json();
-      
-      // Add calculated fields
-      const processedToken = {
-        ...token,
-        price: this.calculateTokenPrice(token),
-        priceChange24h: Math.random() * 20 - 10,
-        volume24h: token.virtual_sol_reserves * 0.1,
-        marketCap: token.usd_market_cap || 0,
-      };
-      
-      this.logger.log(`✅ Fetched token details for ${token.symbol}`);
-      return processedToken;
-      
-    } catch (error) {
-      this.logger.error(`Error fetching token ${mintAddress}:`, error);
-      throw error;
     }
   }
 
-  async getMarketStats(): Promise<any> {
+  async getNewTokens(limit = 50, offset = 0): Promise<{ data: PumpFunToken[] }> {
     try {
-      this.logger.log('Fetching market statistics');
+      this.logger.log(`Fetching new tokens - limit: ${limit}, offset: ${offset}`);
       
-      // Get trending tokens for stats calculation
-      const tokens = await this.getTrendingTokens({ limit: 100 });
+      const response = await axios.get(`${this.PUMP_API_BASE}/coins`, {
+        params: {
+          offset,
+          limit,
+          sort: 'created_timestamp',
+          order: 'DESC',
+          includeNsfw: false,
+        },
+        timeout: 10000,
+      });
+
+      const tokens = response.data || [];
+      this.logger.log(`Fetched ${tokens.length} new tokens`);
+      
+      return { data: tokens };
+    } catch (error) {
+      this.logger.error('Failed to fetch new tokens:', error.message);
+      return { data: [] };
+    }
+  }
+
+  async searchTokens(query: string, limit = 20): Promise<{ data: PumpFunToken[] }> {
+    try {
+      this.logger.log(`Searching tokens with query: "${query}" - limit: ${limit}`);
+      
+      const response = await axios.get(`${this.PUMP_API_BASE}/coins/search`, {
+        params: {
+          q: query,
+          limit,
+          includeNsfw: false,
+        },
+        timeout: 10000,
+      });
+
+      const tokens = response.data || [];
+      this.logger.log(`Found ${tokens.length} tokens for query: "${query}"`);
+      
+      return { data: tokens };
+    } catch (error) {
+      this.logger.error(`Failed to search tokens for query "${query}":`, error.message);
+      return { data: [] };
+    }
+  }
+
+  async getTokenDetails(mint: string): Promise<{ data: PumpFunToken | null }> {
+    try {
+      this.logger.log(`Fetching token details for mint: ${mint}`);
+      
+      const response = await axios.get(`${this.PUMP_API_BASE}/coins/${mint}`, {
+        timeout: 10000,
+      });
+
+      const token = response.data;
+      this.logger.log(`Fetched token details: ${token?.name || 'Unknown'}`);
+      
+      return { data: token };
+    } catch (error) {
+      this.logger.error(`Failed to fetch token details for ${mint}:`, error.message);
+      return { data: null };
+    }
+  }
+
+  async getTokenTrades(mint: string, limit = 50, offset = 0): Promise<{ data: TokenTrade[] }> {
+    try {
+      this.logger.log(`Fetching trades for token: ${mint} - limit: ${limit}, offset: ${offset}`);
+      
+      const response = await axios.get(`${this.PUMP_API_BASE}/trades/all/${mint}`, {
+        params: {
+          offset,
+          limit,
+        },
+        timeout: 10000,
+      });
+
+      const trades = response.data || [];
+      this.logger.log(`Fetched ${trades.length} trades for token: ${mint}`);
+      
+      return { data: trades };
+    } catch (error) {
+      this.logger.error(`Failed to fetch trades for token ${mint}:`, error.message);
+      return { data: [] };
+    }
+  }
+
+  async getLatestTrades(limit = 100): Promise<{ data: TokenTrade[] }> {
+    try {
+      this.logger.log(`Fetching latest trades - limit: ${limit}`);
+      
+      const response = await axios.get(`${this.PUMP_API_BASE}/trades/latest`, {
+        params: { limit },
+        timeout: 10000,
+      });
+
+      const trades = response.data || [];
+      this.logger.log(`Fetched ${trades.length} latest trades`);
+      
+      return { data: trades };
+    } catch (error) {
+      this.logger.error('Failed to fetch latest trades:', error.message);
+      return { data: [] };
+    }
+  }
+
+  async getSolPrice(): Promise<{ data: { price: number } }> {
+    try {
+      this.logger.log('Fetching SOL price');
+      
+      // Try pump.fun API first
+      const response = await axios.get(`${this.PUMP_API_BASE}/sol-price`, {
+        timeout: 5000,
+      });
+
+      const price = response.data?.price || 0;
+      this.logger.log(`SOL price: $${price}`);
+      
+      return { data: { price } };
+    } catch (error) {
+      this.logger.error('Failed to fetch SOL price from pump.fun, trying fallback');
+      
+      // Fallback to CoinGecko
+      try {
+        const response = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd', {
+          timeout: 5000,
+        });
+        
+        const price = response.data?.solana?.usd || 0;
+        this.logger.log(`SOL price (fallback): $${price}`);
+        
+        return { data: { price } };
+      } catch (fallbackError) {
+        this.logger.error('Failed to fetch SOL price from fallback:', fallbackError.message);
+        return { data: { price: 0 } };
+      }
+    }
+  }
+
+  async getMarketStats(): Promise<{ data: any }> {
+    try {
+      this.logger.log('Calculating market stats from real token data');
+      
+      // Get trending tokens to calculate stats
+      const trendingResult = await this.getTrendingTokens(100);
+      const tokens = trendingResult.data;
+      
+      const totalMarketCap = tokens.reduce((sum, token) => sum + (token.usd_market_cap || 0), 0);
+      const activeTokens = tokens.filter(token => token.is_currently_live).length;
+      const successfulGraduations = tokens.filter(token => token.complete).length;
+      const totalVolume24h = tokens.reduce((sum, token) => sum + (token.volume_24h || 0), 0);
       
       const stats = {
+        totalMarketCap,
+        totalVolume24h,
+        activeTokens,
+        successfulGraduations,
         totalTokens: tokens.length,
-        totalMarketCap: tokens.reduce((sum, token) => sum + (token.marketCap || 0), 0),
-        totalVolume24h: tokens.reduce((sum, token) => sum + (token.volume24h || 0), 0),
-        activeTokens: tokens.filter(token => token.is_currently_live).length,
-        averageMarketCap: tokens.reduce((sum, token) => sum + (token.marketCap || 0), 0) / tokens.length,
-        topGainers: tokens
-          .sort((a, b) => (b.priceChange24h || 0) - (a.priceChange24h || 0))
-          .slice(0, 5),
-        topLosers: tokens
-          .sort((a, b) => (a.priceChange24h || 0) - (b.priceChange24h || 0))
-          .slice(0, 5),
       };
       
-      this.logger.log('✅ Calculated market statistics');
-      return stats;
+      this.logger.log(`Market stats calculated: ${JSON.stringify(stats)}`);
       
+      return { data: stats };
     } catch (error) {
-      this.logger.error('Error fetching market stats:', error);
-      throw error;
+      this.logger.error('Failed to calculate market stats:', error.message);
+      return {
+        data: {
+          totalMarketCap: 0,
+          totalVolume24h: 0,
+          activeTokens: 0,
+          successfulGraduations: 0,
+          totalTokens: 0,
+        }
+      };
     }
-  }
-
-  private calculateTokenPrice(token: PumpFunToken): number {
-    try {
-      if (!token.virtual_sol_reserves || !token.virtual_token_reserves) {
-        return 0;
-      }
-      
-      // Basic price calculation based on reserves
-      const price = token.virtual_sol_reserves / token.virtual_token_reserves;
-      return price;
-      
-    } catch (error) {
-      this.logger.warn('Error calculating token price:', error);
-      return 0;
-    }
-  }
-
-  private getMockTokens(): PumpFunToken[] {
-    return [
-      {
-        mint: 'MOCK1234567890ABCDEF',
-        name: 'Mock Token 1',
-        symbol: 'MOCK1',
-        description: 'A mock token for testing',
-        image: 'https://via.placeholder.com/200',
-        created_timestamp: Date.now(),
-        complete: false,
-        virtual_sol_reserves: 1000,
-        virtual_token_reserves: 1000000,
-        total_supply: 1000000000,
-        bonding_curve: 'BONDING_CURVE_ADDRESS',
-        associated_bonding_curve: 'ASSOCIATED_BONDING_CURVE',
-        creator: 'CREATOR_ADDRESS',
-        marketCap: 50000,
-        volume24h: 10000,
-        priceChange24h: 5.2,
-        price: 0.001,
-        market_cap: 50000,
-        reply_count: 10,
-        last_reply: Date.now(),
-        nsfw: false,
-        is_currently_live: true,
-        show_name: true,
-        last_trade_timestamp: Date.now(),
-        usd_market_cap: 50000,
-        raydium_pool: undefined,
-        website: undefined,
-        telegram: undefined,
-        twitter: undefined,
-        market_id: undefined,
-        inverted: false,
-        king_of_the_hill_timestamp: undefined,
-      }
-    ];
   }
 }

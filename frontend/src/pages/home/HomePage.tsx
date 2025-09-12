@@ -9,7 +9,11 @@ import {
   ExternalLink,
   ArrowUpRight,
   ArrowDownRight,
-  Loader2
+  Loader2,
+  Activity,
+  DollarSign,
+  Users,
+  Trophy
 } from 'lucide-react';
 import { pumpFunApi, type PumpToken } from '../../services/pump-api/pump-fun.service';
 import { useWallet } from '../../hooks/useWallet';
@@ -22,9 +26,11 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [marketStats, setMarketStats] = useState<any>(null);
   
   useEffect(() => {
     fetchTokens();
+    fetchMarketStats();
   }, [activeTab]);
   
   const fetchTokens = async () => {
@@ -36,22 +42,31 @@ export default function HomePage() {
       
       switch (activeTab) {
         case 'trending':
-          fetchedTokens = await pumpFunApi.getTrendingTokens(30);
+          fetchedTokens = await pumpFunApi.getTrendingTokens(50);
           break;
         case 'new':
-          fetchedTokens = await pumpFunApi.getNewTokens(30);
+          fetchedTokens = await pumpFunApi.getNewTokens(50);
           break;
         case 'featured':
-          fetchedTokens = await pumpFunApi.getFeaturedTokens(30);
+          fetchedTokens = await pumpFunApi.getFeaturedTokens(50);
           break;
       }
       
       setTokens(fetchedTokens);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to fetch tokens:', err);
-      setError('Failed to load tokens. Please try again.');
+      setError(err.message || 'Failed to load tokens. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMarketStats = async () => {
+    try {
+      const stats = await pumpFunApi.getMarketStats();
+      setMarketStats(stats);
+    } catch (error) {
+      console.error('Failed to fetch market stats:', error);
     }
   };
   
@@ -62,11 +77,13 @@ export default function HomePage() {
     }
     
     setLoading(true);
+    setError(null);
+    
     try {
       const results = await pumpFunApi.searchTokens(searchQuery);
       setTokens(results);
-    } catch (err) {
-      setError('Search failed. Please try again.');
+    } catch (err: any) {
+      setError(err.message || 'Search failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -74,25 +91,30 @@ export default function HomePage() {
   
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchTokens();
+    await Promise.all([fetchTokens(), fetchMarketStats()]);
     setRefreshing(false);
   };
   
   const formatPrice = (price: number) => {
-    if (price < 0.00001) return price.toExponential(2);
-    if (price < 1) return price.toFixed(6);
-    return price.toFixed(2);
+    return pumpFunApi.formatPrice(price);
   };
   
   const formatMarketCap = (marketCap: number) => {
-    if (marketCap >= 1e9) return `$${(marketCap / 1e9).toFixed(2)}B`;
-    if (marketCap >= 1e6) return `$${(marketCap / 1e6).toFixed(2)}M`;
-    if (marketCap >= 1e3) return `$${(marketCap / 1e3).toFixed(2)}K`;
-    return `$${marketCap.toFixed(2)}`;
+    return pumpFunApi.formatMarketCap(marketCap);
+  };
+  
+  const formatTimeAgo = (timestamp: number) => {
+    return pumpFunApi.formatTimeAgo(timestamp);
   };
   
   const truncateAddress = (address: string) => {
-    return `${address.slice(0, 4)}...${address.slice(-4)}`;
+    return pumpFunApi.formatAddress(address);
+  };
+
+  const calculateMockPriceChange = (token: PumpToken) => {
+    // Simple mock calculation based on token properties
+    const factor = (token.usd_market_cap + token.reply_count) % 100;
+    return (factor - 50) / 2; // Range from -25% to +25%
   };
   
   return (
@@ -108,6 +130,40 @@ export default function HomePage() {
               The fastest and fairest platform to launch and trade meme coins on Solana
             </p>
             
+            {/* Market Stats */}
+            {marketStats && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto mb-8">
+                <div className="bg-gray-800/50 rounded-lg p-4">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Activity className="w-5 h-5 text-green-400" />
+                    <span className="text-gray-400 text-sm">Total Tokens</span>
+                  </div>
+                  <p className="text-2xl font-bold text-white">{marketStats.totalTokens?.toLocaleString() || '0'}</p>
+                </div>
+                <div className="bg-gray-800/50 rounded-lg p-4">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <DollarSign className="w-5 h-5 text-blue-400" />
+                    <span className="text-gray-400 text-sm">Market Cap</span>
+                  </div>
+                  <p className="text-2xl font-bold text-white">{formatMarketCap(marketStats.totalMarketCap || 0)}</p>
+                </div>
+                <div className="bg-gray-800/50 rounded-lg p-4">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Users className="w-5 h-5 text-yellow-400" />
+                    <span className="text-gray-400 text-sm">Active</span>
+                  </div>
+                  <p className="text-2xl font-bold text-white">{marketStats.activeTokens?.toLocaleString() || '0'}</p>
+                </div>
+                <div className="bg-gray-800/50 rounded-lg p-4">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Trophy className="w-5 h-5 text-purple-400" />
+                    <span className="text-gray-400 text-sm">24h New</span>
+                  </div>
+                  <p className="text-2xl font-bold text-white">{marketStats.last24Hours?.newTokens?.toLocaleString() || '0'}</p>
+                </div>
+              </div>
+            )}
+            
             {/* Search Bar */}
             <div className="max-w-2xl mx-auto mb-8">
               <div className="flex gap-2">
@@ -115,7 +171,7 @@ export default function HomePage() {
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                   <input
                     type="text"
-                    placeholder="Search by token name or symbol..."
+                    placeholder="Search by token name, symbol, or mint address..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
@@ -124,7 +180,8 @@ export default function HomePage() {
                 </div>
                 <button
                   onClick={handleSearch}
-                  className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+                  disabled={loading}
+                  className="px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-white rounded-lg font-medium transition-colors"
                 >
                   Search
                 </button>
@@ -198,27 +255,49 @@ export default function HomePage() {
         {/* Tokens Grid */}
         {loading ? (
           <div className="flex justify-center items-center py-20">
-            <Loader2 className="w-8 h-8 text-green-400 animate-spin" />
+            <div className="text-center">
+              <Loader2 className="w-8 h-8 text-green-400 animate-spin mx-auto mb-4" />
+              <p className="text-gray-400">Loading {activeTab} tokens...</p>
+            </div>
           </div>
         ) : error ? (
-          <div className="bg-red-900/20 border border-red-500 rounded-lg p-4 text-red-400">
-            {error}
+          <div className="bg-red-900/20 border border-red-500 rounded-lg p-6 text-center">
+            <p className="text-red-400 mb-4">{error}</p>
+            <button
+              onClick={handleRefresh}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+            >
+              Try Again
+            </button>
           </div>
         ) : tokens.length === 0 ? (
-          <div className="text-center py-20 text-gray-400">
-            No tokens found. Try refreshing or searching for different tokens.
+          <div className="text-center py-20">
+            <p className="text-gray-400 text-lg mb-4">
+              {searchQuery ? `No tokens found for "${searchQuery}"` : `No ${activeTab} tokens found`}
+            </p>
+            {searchQuery && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  fetchTokens();
+                }}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+              >
+                Clear Search
+              </button>
+            )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {tokens.map((token) => {
-              const price = pumpFunApi.calculatePrice(token);
-              const priceChange = Math.random() * 40 - 20; // Mock price change
+              const price = token.price || pumpFunApi.calculatePrice(token);
+              const priceChange = calculateMockPriceChange(token);
               
               return (
                 <Link
                   key={token.mint}
                   to={`/token/${token.mint}`}
-                  className="bg-gray-800 hover:bg-gray-750 rounded-lg p-4 transition-all hover:transform hover:scale-105"
+                  className="bg-gray-800 hover:bg-gray-750 rounded-lg p-4 transition-all hover:transform hover:scale-105 border border-gray-700 hover:border-green-500"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
@@ -226,37 +305,46 @@ export default function HomePage() {
                         <img
                           src={token.image_uri}
                           alt={token.symbol}
-                          className="w-10 h-10 rounded-full"
+                          className="w-12 h-12 rounded-full object-cover"
                           onError={(e) => {
-                            (e.target as HTMLImageElement).src = '/default-token.png';
+                            (e.target as HTMLImageElement).src = `https://via.placeholder.com/48/6B7280/FFFFFF?text=${token.symbol[0]}`;
                           }}
                         />
                       ) : (
-                        <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
-                          <span className="text-lg font-bold">{token.symbol[0]}</span>
+                        <div className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center">
+                          <span className="text-lg font-bold text-white">{token.symbol[0]}</span>
                         </div>
                       )}
                       <div>
-                        <h3 className="font-bold text-white">{token.name}</h3>
-                        <p className="text-sm text-gray-400">{token.symbol}</p>
+                        <h3 className="font-bold text-white text-sm">{token.name}</h3>
+                        <p className="text-xs text-gray-400">${token.symbol}</p>
                       </div>
                     </div>
-                    {token.complete && (
-                      <span className="px-2 py-1 bg-green-900/50 text-green-400 text-xs rounded">
-                        Graduated
-                      </span>
-                    )}
+                    <div className="flex flex-col gap-1">
+                      {token.complete && (
+                        <span className="px-2 py-1 bg-green-900/50 text-green-400 text-xs rounded text-center">
+                          Graduated
+                        </span>
+                      )}
+                      {token.is_currently_live && !token.complete && (
+                        <span className="px-2 py-1 bg-blue-900/50 text-blue-400 text-xs rounded text-center">
+                          Live
+                        </span>
+                      )}
+                    </div>
                   </div>
                   
-                  <p className="text-gray-400 text-sm mb-3 line-clamp-2">
+                  <p className="text-gray-400 text-xs mb-3 line-clamp-2 min-h-[32px]">
                     {token.description || 'No description available'}
                   </p>
                   
-                  <div className="flex justify-between items-end">
-                    <div>
-                      <p className="text-xs text-gray-400">Price</p>
-                      <p className="font-mono text-white">${formatPrice(price)}</p>
-                      <div className={`flex items-center gap-1 text-sm ${
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-xs text-gray-400">Price</p>
+                        <p className="font-mono text-white text-sm">{formatPrice(price)}</p>
+                      </div>
+                      <div className={`flex items-center gap-1 text-xs ${
                         priceChange >= 0 ? 'text-green-400' : 'text-red-400'
                       }`}>
                         {priceChange >= 0 ? (
@@ -267,18 +355,27 @@ export default function HomePage() {
                         {Math.abs(priceChange).toFixed(2)}%
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xs text-gray-400">Market Cap</p>
-                      <p className="font-medium text-white">
-                        {formatMarketCap(token.usd_market_cap)}
-                      </p>
+                    
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-xs text-gray-400">Market Cap</p>
+                        <p className="font-medium text-white text-sm">
+                          {formatMarketCap(token.usd_market_cap)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-400">Created</p>
+                        <p className="text-xs text-gray-300">
+                          {formatTimeAgo(token.created_timestamp)}
+                        </p>
+                      </div>
                     </div>
                   </div>
                   
                   <div className="mt-3 pt-3 border-t border-gray-700 flex items-center justify-between">
                     <div className="flex items-center gap-1 text-xs text-gray-400">
                       <span>by</span>
-                      <span className="font-mono">
+                      <span className="font-mono text-gray-300">
                         {truncateAddress(token.creator)}
                       </span>
                     </div>
@@ -289,7 +386,7 @@ export default function HomePage() {
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="text-gray-400 hover:text-blue-400"
+                          className="text-gray-400 hover:text-blue-400 transition-colors"
                         >
                           <ExternalLink className="w-3 h-3" />
                         </a>
@@ -300,16 +397,41 @@ export default function HomePage() {
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="text-gray-400 hover:text-blue-400"
+                          className="text-gray-400 hover:text-blue-400 transition-colors"
                         >
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       )}
+                      <a
+                        href={pumpFunApi.getPumpFunUrl(token.mint)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-gray-400 hover:text-green-400 transition-colors"
+                        title="View on Pump.fun"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
                     </div>
                   </div>
                 </Link>
               );
             })}
+          </div>
+        )}
+        
+        {/* Load More Button */}
+        {tokens.length > 0 && tokens.length >= 50 && (
+          <div className="text-center mt-8">
+            <button
+              onClick={() => {
+                // Implement pagination
+                console.log('Load more tokens');
+              }}
+              className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors"
+            >
+              Load More Tokens
+            </button>
           </div>
         )}
       </div>

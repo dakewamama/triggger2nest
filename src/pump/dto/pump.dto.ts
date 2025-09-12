@@ -1,8 +1,5 @@
 import { IsString, IsNotEmpty, IsNumber, Min, IsOptional } from 'class-validator';
 
-/**
- * DTO for creating a new token.
- */
 export class CreateTokenDto {
   @IsString()
   @IsNotEmpty()
@@ -17,28 +14,32 @@ export class CreateTokenDto {
   description: string;
 }
 
-/**
- * DTO for buying tokens.
- */
 export class BuyTokenDto {
   @IsString()
   @IsNotEmpty()
   mintAddress: string;
 
   @IsNumber()
-  @Min(0.000000001) // Smallest possible amount to ensure it's positive
-  amountSol: number; // Required for buying
+  @Min(0.000000001)
+  amountSol: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  slippage?: number; // Slippage tolerance in basis points (e.g., 500 = 5%)
 }
 
-/**
- * DTO for selling tokens.
- */
 export class SellTokenDto {
   @IsString()
   @IsNotEmpty()
   mintAddress: string;
 
   @IsNumber()
-  @Min(0.000000001) // Smallest possible amount to ensure it's positive
-  amountTokens: number; // Required for selling
+  @Min(0.000000001)
+  amountTokens: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  slippage?: number; // Slippage tolerance in basis points
 }
