@@ -27,11 +27,26 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:8000', // Changed from 3000 to 8000
+        changeOrigin: true,
+        secure: false,
+      },
+      '/pump': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/tokens': {
+        target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
       },
     },
+    allowedHosts: [
+      'localhost',
+      '127.0.0.1',
+      'afdaea06ea75.ngrok-free.app',
+    ],
   },
   define: {
     global: 'globalThis',

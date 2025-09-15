@@ -1,4 +1,3 @@
-// frontend/src/services/pump-api/pump-fun.service.ts
 import axios from 'axios';
 import { ENV } from '../../config/env';
 
@@ -32,11 +31,11 @@ export interface PumpToken {
   username?: string;
   profile_image?: string;
   usd_market_cap: number;
-  // Add missing properties
   price?: number;
   is_currently_live: boolean;
   volume_24h?: number;
   price_change_24h?: number;
+  last_trade_timestamp?: number;
 }
 
 export interface TokenTrade {
@@ -57,16 +56,18 @@ export interface MarketStats {
   totalVolume24h: number;
   activeTokens: number;
   successfulGraduations: number;
+  totalTokens?: number;
+  last24Hours?: {
+    newTokens?: number;
+  };
 }
 
 class PumpFunApiService {
-  // Use REAL pump.fun official API
-  private readonly PUMP_API_BASE = 'https://frontend-api.pump.fun';
-  // Fallback to your backend if needed
-  private readonly backendUrl = ENV.API_URL;
+  // Use your backend as proxy - NO DIRECT CALLS to pump.fun
+  private readonly API_BASE = ENV.API_URL || 'http://localhost:3000';
   
   private readonly axiosConfig = {
-    timeout: 10000,
+    timeout: 15000,
     headers: {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
@@ -75,18 +76,14 @@ class PumpFunApiService {
 
   async getFeaturedTokens(limit = 10, offset = 0): Promise<PumpToken[]> {
     try {
-      console.log(`[PumpFunAPI] Fetching featured tokens (King of the Hill) - limit: ${limit}, offset: ${offset}`);
+      console.log(`[PumpFunAPI] Fetching featured tokens - limit: ${limit}, offset: ${offset}`);
       
-      const response = await axios.get(`${this.PUMP_API_BASE}/coins/king-of-the-hill`, {
+      const response = await axios.get(`${this.API_BASE}/tokens/featured`, {
         ...this.axiosConfig,
-        params: {
-          offset,
-          limit,
-          includeNsfw: false,
-        },
+        params: { limit, offset },
       });
 
-      const tokens = response.data || [];
+      const tokens = response.data?.data || [];
       console.log(`[PumpFunAPI] Fetched ${tokens.length} featured tokens`);
       
       return this.processTokens(tokens);
@@ -100,18 +97,12 @@ class PumpFunApiService {
     try {
       console.log(`[PumpFunAPI] Fetching trending tokens - limit: ${limit}, offset: ${offset}`);
       
-      const response = await axios.get(`${this.PUMP_API_BASE}/coins`, {
+      const response = await axios.get(`${this.API_BASE}/tokens/trending`, {
         ...this.axiosConfig,
-        params: {
-          limit,
-          offset,
-          sort: 'market_cap',
-          order: 'DESC',
-          includeNsfw: false,
-        },
+        params: { limit, offset },
       });
 
-      const tokens = response.data || [];
+      const tokens = response.data?.data || [];
       console.log(`[PumpFunAPI] Fetched ${tokens.length} trending tokens`);
       
       return this.processTokens(tokens);
@@ -125,18 +116,12 @@ class PumpFunApiService {
     try {
       console.log(`[PumpFunAPI] Fetching new tokens - limit: ${limit}, offset: ${offset}`);
       
-      const response = await axios.get(`${this.PUMP_API_BASE}/coins`, {
+      const response = await axios.get(`${this.API_BASE}/tokens/new`, {
         ...this.axiosConfig,
-        params: {
-          limit,
-          offset,
-          sort: 'created_timestamp',
-          order: 'DESC',
-          includeNsfw: false,
-        },
+        params: { limit, offset },
       });
 
-      const tokens = response.data || [];
+      const tokens = response.data?.data || [];
       console.log(`[PumpFunAPI] Fetched ${tokens.length} new tokens`);
       
       return this.processTokens(tokens);
@@ -150,16 +135,12 @@ class PumpFunApiService {
     try {
       console.log(`[PumpFunAPI] Searching tokens with query: "${query}"`);
       
-      const response = await axios.get(`${this.PUMP_API_BASE}/coins/search`, {
+      const response = await axios.get(`${this.API_BASE}/tokens/search`, {
         ...this.axiosConfig,
-        params: { 
-          q: query, 
-          limit: 20,
-          includeNsfw: false,
-        },
+        params: { q: query },
       });
 
-      const tokens = response.data || [];
+      const tokens = response.data?.data || [];
       console.log(`[PumpFunAPI] Found ${tokens.length} tokens for query: "${query}"`);
       
       return this.processTokens(tokens);
@@ -173,9 +154,9 @@ class PumpFunApiService {
     try {
       console.log(`[PumpFunAPI] Fetching token details for mint: ${mint}`);
       
-      const response = await axios.get(`${this.PUMP_API_BASE}/coins/${mint}`, this.axiosConfig);
+      const response = await axios.get(`${this.API_BASE}/tokens/${mint}`, this.axiosConfig);
 
-      const token = response.data;
+      const token = response.data?.data;
       if (token) {
         console.log(`[PumpFunAPI] Fetched token details: ${token.name}`);
         return this.processToken(token);
@@ -192,15 +173,12 @@ class PumpFunApiService {
     try {
       console.log(`[PumpFunAPI] Fetching trades for token: ${mint} - limit: ${limit}, offset: ${offset}`);
       
-      const response = await axios.get(`${this.PUMP_API_BASE}/trades/all/${mint}`, {
+      const response = await axios.get(`${this.API_BASE}/tokens/${mint}/trades`, {
         ...this.axiosConfig,
-        params: {
-          offset,
-          limit,
-        },
+        params: { limit, offset },
       });
 
-      const trades = response.data || [];
+      const trades = response.data?.data || [];
       console.log(`[PumpFunAPI] Fetched ${trades.length} trades for token: ${mint}`);
       
       return trades;
@@ -212,9 +190,17 @@ class PumpFunApiService {
 
   async getMarketStats(): Promise<MarketStats> {
     try {
-      console.log('[PumpFunAPI] Calculating market stats from real data');
+      console.log('[PumpFunAPI] Fetching market stats');
       
-      // Get trending tokens to calculate stats
+      // Use the backend endpoint for market stats
+      const response = await axios.get(`${this.API_BASE}/tokens/stats/market`, this.axiosConfig);
+      
+      if (response.data?.data) {
+        console.log('[PumpFunAPI] Market stats fetched:', response.data.data);
+        return response.data.data;
+      }
+      
+      // Fallback calculation if endpoint fails
       const tokens = await this.getTrendingTokens(100);
       
       const totalMarketCap = tokens.reduce((sum, token) => sum + (token.usd_market_cap || 0), 0);
@@ -227,18 +213,19 @@ class PumpFunApiService {
         totalVolume24h,
         activeTokens,
         successfulGraduations,
+        totalTokens: tokens.length,
       };
       
       console.log('[PumpFunAPI] Market stats calculated:', stats);
-      
       return stats;
     } catch (error) {
-      console.error('[PumpFunAPI] Failed to calculate market stats:', error);
+      console.error('[PumpFunAPI] Failed to fetch market stats:', error);
       return {
         totalMarketCap: 0,
         totalVolume24h: 0,
         activeTokens: 0,
         successfulGraduations: 0,
+        totalTokens: 0,
       };
     }
   }
@@ -255,10 +242,14 @@ class PumpFunApiService {
     // Ensure is_currently_live is set
     const is_currently_live = token.is_currently_live ?? (!token.complete && token.virtual_sol_reserves > 0);
     
+    // Ensure last_trade_timestamp exists
+    const last_trade_timestamp = token.last_trade_timestamp || token.created_timestamp;
+    
     return {
       ...token,
       price,
       is_currently_live,
+      last_trade_timestamp,
       // Ensure all required fields have defaults
       volume_24h: token.volume_24h || 0,
       price_change_24h: token.price_change_24h || 0,
@@ -310,6 +301,7 @@ class PumpFunApiService {
   }
 
   formatAddress(address: string, length: number = 6): string {
+    if (!address) return '';
     if (address.length <= length * 2) {
       return address;
     }
@@ -338,7 +330,7 @@ class PumpFunApiService {
     // Calculate price based on bonding curve formula
     const { virtual_sol_reserves, virtual_token_reserves } = token;
     
-    if (virtual_token_reserves === 0) return 0;
+    if (!virtual_token_reserves || virtual_token_reserves === 0) return 0;
     
     return virtual_sol_reserves / virtual_token_reserves;
   }
