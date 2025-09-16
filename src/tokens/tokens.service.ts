@@ -54,32 +54,78 @@ export interface TokenTrade {
 export class TokensService {
   private readonly logger = new Logger(TokensService.name);
   
-  // Official pump.fun frontend API
-  private readonly PUMP_API_BASE = 'https://frontend-api.pump.fun';
-  // Alternative: https://frontend-api-v2.pump.fun or https://frontend-api-v3.pump.fun
-  
-  // PumpPortal for additional data
+  // Using PumpPortal - reliable third-party API
   private readonly PUMPPORTAL_BASE = 'https://pumpportal.fun/api';
+  
+  // Fallback APIs if needed
+  private readonly PUMP_API_FALLBACKS = [
+    'https://frontend-api-v2.pump.fun',
+    'https://frontend-api-v3.pump.fun',
+    'https://api.pump.fun/api'
+  ];
+
+  private async callPumpPortalAPI(endpoint: string, params: any = {}): Promise<any> {
+    try {
+      const response = await axios.get(`${this.PUMPPORTAL_BASE}${endpoint}`, {
+        params,
+        timeout: 10000,
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'YourPumpApp/1.0'
+        }
+      });
+      return response.data;
+    } catch (error) {
+      this.logger.error(`PumpPortal API call failed for ${endpoint}:`, error.message);
+      throw error;
+    }
+  }
+
+  private async callFallbackAPI(endpoint: string, params: any = {}): Promise<any> {
+    for (const baseUrl of this.PUMP_API_FALLBACKS) {
+      try {
+        this.logger.log(`Trying fallback API: ${baseUrl}${endpoint}`);
+        const response = await axios.get(`${baseUrl}${endpoint}`, {
+          params,
+          timeout: 8000,
+        });
+        this.logger.log(`Fallback API ${baseUrl} succeeded`);
+        return response.data;
+      } catch (error) {
+        this.logger.warn(`Fallback API ${baseUrl} failed:`, error.message);
+        continue;
+      }
+    }
+    throw new Error('All fallback APIs failed');
+  }
+
+
 
   async getFeaturedTokens(limit = 20, offset = 0): Promise<{ data: PumpFunToken[] }> {
     try {
-      this.logger.log(`Fetching featured tokens (King of the Hill) - limit: ${limit}, offset: ${offset}`);
+      this.logger.log(`Fetching featured tokens - limit: ${limit}, offset: ${offset}`);
       
-      const response = await axios.get(`${this.PUMP_API_BASE}/coins/king-of-the-hill`, {
-        params: {
+      // Try PumpPortal first - though they don't have a direct "featured" endpoint
+      // We'll try to get trending/popular tokens instead
+      try {
+        // Since PumpPortal doesn't have featured endpoint, we'll simulate with trending
+        const trendingResult = await this.getTrendingTokens(limit, offset);
+        return trendingResult;
+      } catch (pumpPortalError) {
+        this.logger.warn('PumpPortal featured tokens failed, trying fallback APIs');
+        
+        // Try fallback APIs
+        const data = await this.callFallbackAPI('/coins/king-of-the-hill', {
           offset,
           limit,
           includeNsfw: false,
-        },
-        timeout: 10000,
-      });
-
-      const tokens = response.data || [];
-      this.logger.log(`Fetched ${tokens.length} featured tokens`);
-      
-      return { data: tokens };
+        });
+        
+        this.logger.log(`Fetched ${data.length} featured tokens from fallback`);
+        return { data };
+      }
     } catch (error) {
-      this.logger.error('Failed to fetch featured tokens:', error.message);
+      this.logger.error('All featured token APIs failed:', error.message);
       return { data: [] };
     }
   }
@@ -88,32 +134,25 @@ export class TokensService {
     try {
       this.logger.log(`Fetching trending tokens - limit: ${limit}, offset: ${offset}`);
       
-      const response = await axios.get(`${this.PUMP_API_BASE}/coins`, {
-        params: {
+      // Try fallback APIs first since PumpPortal doesn't have trending endpoint
+      try {
+        const data = await this.callFallbackAPI('/coins', {
           offset,
           limit,
           sort: 'market_cap',
           order: 'DESC',
           includeNsfw: false,
-        },
-        timeout: 10000,
-      });
-
-      const tokens = response.data || [];
-      this.logger.log(`Fetched ${tokens.length} trending tokens`);
-      
-      return { data: tokens };
-    } catch (error) {
-      this.logger.error('Failed to fetch trending tokens:', error.message);
-      
-      // Fallback to latest coins if trending fails
-      try {
-        this.logger.log('Trying fallback to latest coins...');
-        return await this.getNewTokens(limit, offset);
+        });
+        
+        this.logger.log(`Fetched ${data.length} trending tokens from fallback API`);
+        return { data };
       } catch (fallbackError) {
-        this.logger.error('Fallback also failed:', fallbackError.message);
+        this.logger.error('All trending token APIs failed:', fallbackError.message);
         return { data: [] };
       }
+    } catch (error) {
+      this.logger.error('All trending token APIs failed:', error.message);
+      return { data: [] };
     }
   }
 
@@ -121,23 +160,24 @@ export class TokensService {
     try {
       this.logger.log(`Fetching new tokens - limit: ${limit}, offset: ${offset}`);
       
-      const response = await axios.get(`${this.PUMP_API_BASE}/coins`, {
-        params: {
+      // Try fallback APIs
+      try {
+        const data = await this.callFallbackAPI('/coins', {
           offset,
           limit,
           sort: 'created_timestamp',
           order: 'DESC',
           includeNsfw: false,
-        },
-        timeout: 10000,
-      });
-
-      const tokens = response.data || [];
-      this.logger.log(`Fetched ${tokens.length} new tokens`);
-      
-      return { data: tokens };
+        });
+        
+        this.logger.log(`Fetched ${data.length} new tokens from fallback API`);
+        return { data };
+      } catch (fallbackError) {
+        this.logger.error('All new token APIs failed:', fallbackError.message);
+        return { data: [] };
+      }
     } catch (error) {
-      this.logger.error('Failed to fetch new tokens:', error.message);
+      this.logger.error('All new token APIs failed:', error.message);
       return { data: [] };
     }
   }
@@ -146,21 +186,22 @@ export class TokensService {
     try {
       this.logger.log(`Searching tokens with query: "${query}" - limit: ${limit}`);
       
-      const response = await axios.get(`${this.PUMP_API_BASE}/coins/search`, {
-        params: {
+      // Try fallback APIs
+      try {
+        const data = await this.callFallbackAPI('/coins/search', {
           q: query,
           limit,
           includeNsfw: false,
-        },
-        timeout: 10000,
-      });
-
-      const tokens = response.data || [];
-      this.logger.log(`Found ${tokens.length} tokens for query: "${query}"`);
-      
-      return { data: tokens };
+        });
+        
+        this.logger.log(`Found ${data.length} tokens for query: "${query}" from fallback API`);
+        return { data };
+      } catch (fallbackError) {
+        this.logger.error(`Search failed for query "${query}":`, fallbackError.message);
+        return { data: [] };
+      }
     } catch (error) {
-      this.logger.error(`Failed to search tokens for query "${query}":`, error.message);
+      this.logger.error(`Search failed for query "${query}":`, error.message);
       return { data: [] };
     }
   }
@@ -169,14 +210,15 @@ export class TokensService {
     try {
       this.logger.log(`Fetching token details for mint: ${mint}`);
       
-      const response = await axios.get(`${this.PUMP_API_BASE}/coins/${mint}`, {
-        timeout: 10000,
-      });
-
-      const token = response.data;
-      this.logger.log(`Fetched token details: ${token?.name || 'Unknown'}`);
-      
-      return { data: token };
+      // Try fallback APIs
+      try {
+        const data = await this.callFallbackAPI(`/coins/${mint}`, {});
+        this.logger.log(`Fetched token details: ${data?.name || 'Unknown'} from fallback API`);
+        return { data };
+      } catch (fallbackError) {
+        this.logger.error(`Token ${mint} not found in any API`);
+        return { data: null };
+      }
     } catch (error) {
       this.logger.error(`Failed to fetch token details for ${mint}:`, error.message);
       return { data: null };
@@ -187,18 +229,19 @@ export class TokensService {
     try {
       this.logger.log(`Fetching trades for token: ${mint} - limit: ${limit}, offset: ${offset}`);
       
-      const response = await axios.get(`${this.PUMP_API_BASE}/trades/all/${mint}`, {
-        params: {
+      // Try fallback APIs
+      try {
+        const data = await this.callFallbackAPI(`/trades/all/${mint}`, {
           offset,
           limit,
-        },
-        timeout: 10000,
-      });
-
-      const trades = response.data || [];
-      this.logger.log(`Fetched ${trades.length} trades for token: ${mint}`);
-      
-      return { data: trades };
+        });
+        
+        this.logger.log(`Fetched ${data.length} trades for token: ${mint} from fallback API`);
+        return { data };
+      } catch (fallbackError) {
+        this.logger.warn(`No trades found for token ${mint}, returning empty array`);
+        return { data: [] };
+      }
     } catch (error) {
       this.logger.error(`Failed to fetch trades for token ${mint}:`, error.message);
       return { data: [] };
@@ -209,15 +252,15 @@ export class TokensService {
     try {
       this.logger.log(`Fetching latest trades - limit: ${limit}`);
       
-      const response = await axios.get(`${this.PUMP_API_BASE}/trades/latest`, {
-        params: { limit },
-        timeout: 10000,
-      });
-
-      const trades = response.data || [];
-      this.logger.log(`Fetched ${trades.length} latest trades`);
-      
-      return { data: trades };
+      // Try fallback APIs
+      try {
+        const data = await this.callFallbackAPI('/trades/latest', { limit });
+        this.logger.log(`Fetched ${data.length} latest trades from fallback API`);
+        return { data };
+      } catch (fallbackError) {
+        this.logger.warn('No latest trades available, returning empty array');
+        return { data: [] };
+      }
     } catch (error) {
       this.logger.error('Failed to fetch latest trades:', error.message);
       return { data: [] };
@@ -228,32 +271,32 @@ export class TokensService {
     try {
       this.logger.log('Fetching SOL price');
       
-      // Try pump.fun API first
-      const response = await axios.get(`${this.PUMP_API_BASE}/sol-price`, {
-        timeout: 5000,
-      });
-
-      const price = response.data?.price || 0;
-      this.logger.log(`SOL price: $${price}`);
-      
-      return { data: { price } };
-    } catch (error) {
-      this.logger.error('Failed to fetch SOL price from pump.fun, trying fallback');
-      
-      // Fallback to CoinGecko
+      // Try CoinGecko directly (most reliable)
       try {
         const response = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd', {
           timeout: 5000,
         });
         
         const price = response.data?.solana?.usd || 0;
-        this.logger.log(`SOL price (fallback): $${price}`);
-        
+        this.logger.log(`SOL price from CoinGecko: $${price}`);
         return { data: { price } };
-      } catch (fallbackError) {
-        this.logger.error('Failed to fetch SOL price from fallback:', fallbackError.message);
-        return { data: { price: 0 } };
+      } catch (coinGeckoError) {
+        this.logger.warn('CoinGecko failed, trying fallback APIs');
+        
+        // Try fallback APIs
+        try {
+          const response = await this.callFallbackAPI('/sol-price', {});
+          const price = response?.price || 0;
+          this.logger.log(`SOL price from fallback: ${price}`);
+          return { data: { price } };
+        } catch (fallbackError) {
+          this.logger.error('All SOL price APIs failed');
+          return { data: { price: 0 } };
+        }
       }
+    } catch (error) {
+      this.logger.error('Failed to fetch SOL price:', error.message);
+      return { data: { price: 0 } };
     }
   }
 
@@ -264,6 +307,19 @@ export class TokensService {
       // Get trending tokens to calculate stats
       const trendingResult = await this.getTrendingTokens(100);
       const tokens = trendingResult.data;
+      
+      if (tokens.length === 0) {
+        this.logger.warn('No tokens available for stats calculation');
+        return {
+          data: {
+            totalMarketCap: 0,
+            totalVolume24h: 0,
+            activeTokens: 0,
+            successfulGraduations: 0,
+            totalTokens: 0,
+          }
+        };
+      }
       
       const totalMarketCap = tokens.reduce((sum, token) => sum + (token.usd_market_cap || 0), 0);
       const activeTokens = tokens.filter(token => token.is_currently_live).length;
@@ -279,7 +335,6 @@ export class TokensService {
       };
       
       this.logger.log(`Market stats calculated: ${JSON.stringify(stats)}`);
-      
       return { data: stats };
     } catch (error) {
       this.logger.error('Failed to calculate market stats:', error.message);

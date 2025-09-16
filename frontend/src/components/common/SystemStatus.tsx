@@ -15,7 +15,7 @@ export default function SystemStatus() {
   const { isConnected, address, balance } = useWallet();
   const [checks, setChecks] = useState<StatusCheck[]>([
     { name: 'Backend API', status: 'checking', message: 'Checking...' },
-    { name: 'Pump.fun API', status: 'checking', message: 'Checking...' },
+    { name: 'Pump.fun Data', status: 'checking', message: 'Checking...' },
     { name: 'Solana RPC', status: 'checking', message: 'Checking...' },
     { name: 'Wallet Connection', status: 'checking', message: 'Checking...' },
     { name: 'Environment', status: 'checking', message: 'Checking...' },
@@ -31,13 +31,16 @@ export default function SystemStatus() {
     
     // Check Backend API
     try {
+      console.log('[SystemStatus] Testing backend connection...');
       const health = await pumpService.healthCheck();
       newChecks.push({
         name: 'Backend API',
         status: 'success',
         message: `Connected to ${ENV.API_URL}`,
       });
-    } catch (error) {
+      console.log('[SystemStatus] Backend connection: SUCCESS');
+    } catch (error: any) {
+      console.error('[SystemStatus] Backend connection failed:', error);
       newChecks.push({
         name: 'Backend API',
         status: 'error',
@@ -45,25 +48,38 @@ export default function SystemStatus() {
       });
     }
     
-    // Check Pump.fun API
+    // Check Pump.fun Data (through our backend)
     try {
+      console.log('[SystemStatus] Testing pump.fun data...');
       const tokens = await pumpFunApi.getTrendingTokens(1);
+      if (tokens && tokens.length > 0) {
+        newChecks.push({
+          name: 'Pump.fun Data',
+          status: 'success',
+          message: `Data available (${tokens.length} tokens)`,
+        });
+        console.log('[SystemStatus] Pump.fun data: SUCCESS');
+      } else {
+        newChecks.push({
+          name: 'Pump.fun Data',
+          status: 'warning',
+          message: 'No token data available',
+        });
+        console.log('[SystemStatus] Pump.fun data: NO DATA');
+      }
+    } catch (error: any) {
+      console.error('[SystemStatus] Pump.fun data failed:', error);
       newChecks.push({
-        name: 'Pump.fun API',
-        status: 'success',
-        message: 'API is accessible',
-      });
-    } catch (error) {
-      newChecks.push({
-        name: 'Pump.fun API',
+        name: 'Pump.fun Data',
         status: 'warning',
-        message: 'API might be rate-limited or down',
+        message: 'Token data unavailable',
       });
     }
     
     // Check Solana RPC
     try {
-      const response = await fetch(ENV.SOLANA_RPC, {
+      console.log('[SystemStatus] Testing Solana RPC...');
+      const response = await fetch(ENV.SOLANA_RPC_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -71,14 +87,21 @@ export default function SystemStatus() {
           id: 1,
           method: 'getHealth',
         }),
+        signal: AbortSignal.timeout(5000), // 5 second timeout
       });
-      const data = await response.json();
-      newChecks.push({
-        name: 'Solana RPC',
-        status: 'success',
-        message: `Connected to ${ENV.SOLANA_NETWORK}`,
-      });
-    } catch (error) {
+      
+      if (response.ok) {
+        newChecks.push({
+          name: 'Solana RPC',
+          status: 'success',
+          message: `Connected to ${ENV.SOLANA_NETWORK}`,
+        });
+        console.log('[SystemStatus] Solana RPC: SUCCESS');
+      } else {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch (error: any) {
+      console.error('[SystemStatus] Solana RPC failed:', error);
       newChecks.push({
         name: 'Solana RPC',
         status: 'error',
@@ -102,15 +125,16 @@ export default function SystemStatus() {
     }
     
     // Check Environment
-    const privyConfigured = ENV.PRIVY_APP_ID && ENV.PRIVY_APP_ID !== '';
+    const envStatus = ENV.API_URL && ENV.SOLANA_NETWORK;
     newChecks.push({
       name: 'Environment',
-      status: privyConfigured ? 'success' : 'warning',
-      message: privyConfigured 
-        ? `${ENV.IS_DEV ? 'Development' : 'Production'} mode`
-        : 'Privy App ID not configured',
+      status: envStatus ? 'success' : 'warning',
+      message: envStatus 
+        ? `${ENV.IS_DEV ? 'Development' : 'Production'} mode (${ENV.SOLANA_NETWORK})`
+        : 'Configuration incomplete',
     });
     
+    console.log('[SystemStatus] Diagnostics completed:', newChecks);
     setChecks(newChecks);
   };
   

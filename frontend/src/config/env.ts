@@ -1,4 +1,3 @@
-// Type declaration for import.meta.env
 interface ImportMetaEnv {
   readonly VITE_API_URL: string
   readonly VITE_PUMP_API_URL: string
@@ -31,13 +30,13 @@ const isDev = () => {
 }
 
 export const ENV = {
-  API_URL: getEnvVar('VITE_API_URL', 'http://localhost:3000'),
+  API_URL: getEnvVar('VITE_API_URL', 'http://localhost:8000'),
   PUMP_API_URL: getEnvVar('VITE_PUMP_API_URL', 'https://frontend-api.pump.fun'),
-  WS_URL: getEnvVar('VITE_WS_URL', 'ws://localhost:3000'),
-  SOLANA_NETWORK: getEnvVar('VITE_SOLANA_NETWORK', 'devnet'),
-  SOLANA_RPC_URL: getEnvVar('VITE_SOLANA_RPC_URL', 'https://api.devnet.solana.com'),
+  WS_URL: getEnvVar('VITE_WS_URL', 'ws://localhost:8000'),
+  SOLANA_NETWORK: getEnvVar('VITE_SOLANA_NETWORK', 'mainnet-beta'),
+  SOLANA_RPC_URL: getEnvVar('VITE_SOLANA_RPC_URL', 'https://api.mainnet-beta.solana.com'), 
   // Add missing properties:
-  SOLANA_RPC: getEnvVar('VITE_SOLANA_RPC_URL', 'https://api.devnet.solana.com'), // Alias for compatibility
+  SOLANA_RPC: getEnvVar('VITE_SOLANA_RPC_URL', 'https://api.mainnet-beta.solana.com'),
   PRIVY_APP_ID: getEnvVar('VITE_PRIVY_APP_ID', ''),
   IS_DEV: isDev(),
 } as const
