@@ -24,6 +24,36 @@ import {
 import { pumpFunApi, type PumpToken } from '../../services/pump-api/pump-fun.service';
 import { useWallet } from '../../hooks/useWallet';
 
+// Utility function to create placeholder images
+const createPlaceholderImage = (text: string, size: number, bgColor = '6B7280', textColor = 'FFFFFF') => {
+  // Create SVG data URL as fallback
+  const svg = `
+    <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="#${bgColor}"/>
+      <text x="50%" y="50%" font-size="${size * 0.4}" fill="#${textColor}" text-anchor="middle" dy=".3em" font-family="Arial, sans-serif" font-weight="bold">
+        ${text}
+      </text>
+    </svg>
+  `;
+  return `data:image/svg+xml;base64,${btoa(svg)}`;
+};
+
+// Multiple fallback options for placeholder services
+const getPlaceholderUrl = (text: string, size: number, index: number = 0) => {
+  const fallbacks = [
+    // Picsum (most reliable)
+    `https://picsum.photos/${size}/${size}?random=${Math.abs(text.charCodeAt(0) + index)}`,
+    // Placeholder.com
+    `https://placeholder.com/${size}x${size}/6B7280/FFFFFF?text=${encodeURIComponent(text)}`,
+    // DummyImage
+    `https://dummyimage.com/${size}x${size}/6B7280/FFFFFF&text=${encodeURIComponent(text)}`,
+    // SVG fallback (always works)
+    createPlaceholderImage(text, size)
+  ];
+  
+  return fallbacks;
+};
+
 export default function HomePage() {
   const { isConnected } = useWallet();
   const [activeTab, setActiveTab] = useState<'trending' | 'new' | 'featured'>('trending');
@@ -140,6 +170,55 @@ export default function HomePage() {
     if (index % 5 === 0) return 'md:col-span-2'; // Wide card
     if (index % 11 === 0) return 'md:row-span-2'; // Tall card
     return ''; // Normal card
+  };
+
+  // Improved image component with cascading fallbacks
+  const TokenImage = ({ token, index, className }: { token: PumpToken; index: number; className: string }) => {
+    const [currentSrc, setCurrentSrc] = useState(token.image_uri || '');
+    const [fallbackIndex, setFallbackIndex] = useState(0);
+    
+    const size = index % 7 === 0 ? 80 : 56;
+    const fallbacks = getPlaceholderUrl(token.symbol[0], size, index);
+    
+    const handleImageError = () => {
+      if (fallbackIndex < fallbacks.length - 1) {
+        setFallbackIndex(prev => prev + 1);
+        setCurrentSrc(fallbacks[fallbackIndex + 1]);
+      } else {
+        // Final fallback - just use the SVG
+        setCurrentSrc(createPlaceholderImage(token.symbol[0], size));
+      }
+    };
+
+    // Reset when token changes
+    useEffect(() => {
+      setCurrentSrc(token.image_uri || fallbacks[0]);
+      setFallbackIndex(0);
+    }, [token.mint]);
+
+    if (!currentSrc && !token.image_uri) {
+      // No image URI, use fallback immediately
+      return (
+        <div className={`${className} bg-gradient-to-br from-gray-700 to-gray-600 rounded-2xl flex items-center justify-center ring-2 ring-gray-600 group-hover:ring-green-400 transition-all duration-300 shadow-lg`}>
+          <span className={`${index % 7 === 0 ? 'text-2xl' : 'text-lg'} font-bold text-white`}>
+            {token.symbol[0]}
+          </span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="relative">
+        <img
+          src={currentSrc}
+          alt={token.symbol}
+          className={`${className} rounded-2xl object-cover ring-2 ring-gray-600 group-hover:ring-green-400 transition-all duration-300 shadow-lg`}
+          onError={handleImageError}
+          loading="lazy"
+        />
+        <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-blue-400 rounded-2xl opacity-0 group-hover:opacity-30 transition-opacity duration-500 blur" />
+      </div>
+    );
   };
   
   return (
@@ -447,23 +526,12 @@ export default function HomePage() {
                       {/* Header */}
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center gap-3">
-                          {token.image_uri ? (
-                            <div className="relative">
-                              <img
-                                src={token.image_uri}
-                                alt={token.symbol}
-                                className={`${index % 7 === 0 ? 'w-20 h-20' : 'w-14 h-14'} rounded-2xl object-cover ring-2 ring-gray-600 group-hover:ring-green-400 transition-all duration-300 shadow-lg`}
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src = `https://via.placeholder.com/${index % 7 === 0 ? '80' : '56'}/6B7280/FFFFFF?text=${token.symbol[0]}`;
-                                }}
-                              />
-                              <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-blue-400 rounded-2xl opacity-0 group-hover:opacity-30 transition-opacity duration-500 blur" />
-                            </div>
-                          ) : (
-                            <div className={`${index % 7 === 0 ? 'w-20 h-20' : 'w-14 h-14'} bg-gradient-to-br from-gray-700 to-gray-600 rounded-2xl flex items-center justify-center ring-2 ring-gray-600 group-hover:ring-green-400 transition-all duration-300 shadow-lg`}>
-                              <span className={`${index % 7 === 0 ? 'text-2xl' : 'text-lg'} font-bold text-white`}>{token.symbol[0]}</span>
-                            </div>
-                          )}
+                          <TokenImage 
+                            token={token} 
+                            index={index} 
+                            className={index % 7 === 0 ? 'w-20 h-20' : 'w-14 h-14'} 
+                          />
+                          
                           <div>
                             <h3 className={`font-bold text-white group-hover:text-green-400 transition-colors duration-300 ${index % 7 === 0 ? 'text-lg' : 'text-sm'}`}>
                               {token.name}

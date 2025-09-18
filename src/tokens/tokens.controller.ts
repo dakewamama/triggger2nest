@@ -7,6 +7,9 @@ export class TokensController {
 
   constructor(private readonly tokensService: TokensService) {}
 
+  /**
+   * Health check endpoint
+   */
   @Get('health')
   async getServiceHealth() {
     try {
@@ -33,6 +36,9 @@ export class TokensController {
     }
   }
 
+  /**
+   * Get featured tokens (King of the Hill)
+   */
   @Get('featured')
   async getFeaturedTokens(
     @Query('limit') limit = 20,
@@ -64,6 +70,9 @@ export class TokensController {
     }
   }
 
+  /**
+   * Get trending tokens
+   */
   @Get('trending')
   async getTrendingTokens(
     @Query('limit') limit = 50,
@@ -95,6 +104,9 @@ export class TokensController {
     }
   }
 
+  /**
+   * Get new tokens
+   */
   @Get('new')
   async getNewTokens(
     @Query('limit') limit = 50,
@@ -126,6 +138,85 @@ export class TokensController {
     }
   }
 
+  /**
+   * Advanced search endpoint with suggestions and related tokens
+   */
+  @Get('search/advanced')
+  async searchTokensAdvanced(
+    @Query('q') query: string,
+    @Query('limit') limit = 20
+  ) {
+    try {
+      if (!query || query.trim().length === 0) {
+        return {
+          success: false,
+          error: 'Query parameter is required',
+          data: [],
+          suggestions: [],
+          relatedTokens: [],
+          searchInfo: {
+            supportedSearchTypes: [
+              'Contract Address (full or partial)',
+              'Token Name',
+              'Token Symbol',
+              'Description',
+              'Fuzzy Matching (handles typos)',
+              'Multi-word Search'
+            ],
+            examples: [
+              'Full CA: "HeLLonEArth5cPN3wQMVYLhgMBR1Wny7t5ggp5pump"',
+              'Partial CA: "HeLLon" or "p5pump"',
+              'Token Name: "Doge"',
+              'Token Symbol: "PEPE"',
+              'Multiple words: "moon coin"'
+            ]
+          }
+        };
+      }
+
+      this.logger.log(`🔍 Advanced search request: "${query}" - limit: ${limit}`);
+      
+      const result = await this.tokensService.searchTokensAdvanced(query.trim(), Number(limit));
+      
+      this.logger.log(`✅ Advanced search completed: ${result.data.length} results, ${result.suggestions?.length || 0} suggestions`);
+      
+      return {
+        success: true,
+        query: query.trim(),
+        searchType: result.searchType,
+        data: result.data,
+        totalMatches: result.totalMatches,
+        suggestions: result.suggestions || [],
+        relatedTokens: result.relatedTokens || [],
+        metadata: {
+          limit: Number(limit),
+          timestamp: new Date().toISOString(),
+          searchCapabilities: {
+            contractAddress: true,
+            tokenName: true,
+            tokenSymbol: true,
+            description: true,
+            fuzzyMatching: true,
+            partialMatching: true,
+            suggestions: true
+          }
+        }
+      };
+    } catch (error) {
+      this.logger.error('Advanced search failed:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to perform advanced search',
+        data: [],
+        suggestions: [],
+        relatedTokens: []
+      };
+    }
+  }
+
+  /**
+   * Standard search endpoint (uses advanced search internally)
+   */
   @Get('search')
   async searchTokens(@Query('q') query: string, @Query('limit') limit = 20) {
     try {
@@ -134,12 +225,30 @@ export class TokensController {
           success: false,
           error: 'Query parameter is required',
           data: [],
+          searchInfo: {
+            supportedSearchTypes: [
+              'Contract Address (full or partial)',
+              'Token Name',
+              'Token Symbol',
+              'Description',
+              'Fuzzy Matching (handles typos)',
+              'Multi-word Search'
+            ],
+            examples: [
+              'Full CA: "HeLLonEArth5cPN3wQMVYLhgMBR1Wny7t5ggp5pump"',
+              'Partial CA: "HeLLon" or "p5pump"',
+              'Token Name: "Doge"',
+              'Token Symbol: "PEPE"',
+              'Multiple words: "moon coin"'
+            ]
+          }
         };
       }
 
       this.logger.log(`Searching tokens with query: "${query}" - limit: ${limit}`);
       
-      const result = await this.tokensService.searchTokens(query.trim(), Number(limit));
+      // Use the advanced search
+      const result = await this.tokensService.searchTokensAdvanced(query.trim(), Number(limit));
       
       this.logger.log(`Found ${result.data.length} tokens for query: "${query}"`);
       
@@ -147,6 +256,9 @@ export class TokensController {
         success: true,
         data: result.data,
         query: query.trim(),
+        searchType: result.searchType,
+        totalMatches: result.totalMatches || result.data.length,
+        suggestions: result.suggestions || [],
         pagination: {
           limit: Number(limit),
           total: result.data.length,
@@ -162,6 +274,9 @@ export class TokensController {
     }
   }
 
+  /**
+   * Get token details by mint address
+   */
   @Get(':mint')
   async getTokenByMint(@Param('mint') mint: string) {
     try {
@@ -201,6 +316,9 @@ export class TokensController {
     }
   }
 
+  /**
+   * Get trades for a specific token
+   */
   @Get(':mint/trades')
   async getTokenTrades(
     @Param('mint') mint: string,
@@ -242,6 +360,9 @@ export class TokensController {
     }
   }
 
+  /**
+   * Get latest trades across all tokens
+   */
   @Get('trades/latest')
   async getLatestTrades(@Query('limit') limit = 100) {
     try {
@@ -269,6 +390,9 @@ export class TokensController {
     }
   }
 
+  /**
+   * Get market statistics
+   */
   @Get('stats/market')
   async getMarketStats() {
     try {
@@ -298,6 +422,9 @@ export class TokensController {
     }
   }
 
+  /**
+   * Get SOL price
+   */
   @Get('price/sol')
   async getSolPrice() {
     try {
@@ -321,16 +448,20 @@ export class TokensController {
     }
   }
 
+  /**
+   * Dashboard analytics endpoint
+   */
   @Get('analytics/dashboard')
   async getDashboardData() {
     try {
       this.logger.log('Fetching dashboard analytics data');
       
       // Fetch multiple data sources concurrently
-      const [featuredResult, trendingResult, newResult] = await Promise.all([
+      const [featuredResult, trendingResult, newResult, marketStats] = await Promise.all([
         this.tokensService.getFeaturedTokens(10),
         this.tokensService.getTrendingTokens(20),
         this.tokensService.getNewTokens(20),
+        this.tokensService.getMarketStats(),
       ]);
 
       const totalFeatured = featuredResult.data.length;
@@ -347,6 +478,7 @@ export class TokensController {
         featuredTokens: featuredResult.data,
         trendingTokens: trendingResult.data,
         newTokens: newResult.data,
+        marketStats: marketStats.data,
         summary: {
           totalFeatured,
           totalTrending,
@@ -370,6 +502,7 @@ export class TokensController {
           featuredTokens: [],
           trendingTokens: [],
           newTokens: [],
+          marketStats: null,
           summary: {
             totalFeatured: 0,
             totalTrending: 0,
@@ -379,5 +512,154 @@ export class TokensController {
         },
       };
     }
+  }
+
+  /**
+   * Debug endpoint - Search test
+   */
+  @Get('debug/search-test')
+  async testSearch(@Query('q') query: string = 'test') {
+    try {
+      this.logger.log(`========== SEARCH DIAGNOSTIC ==========`);
+      this.logger.log(`Testing search for: "${query}"`);
+      
+      // First, fetch some tokens to see what's available
+      const sampleTokens = await this.tokensService.getTrendingTokens(50, 0);
+      
+      // Get unique first letters of token names
+      const firstLetters = new Set(
+        sampleTokens.data
+          .map(t => t.name?.charAt(0)?.toUpperCase())
+          .filter(Boolean)
+      );
+      
+      // Get tokens that might match the query
+      const searchTerm = query.toLowerCase();
+      const potentialMatches = sampleTokens.data.filter(token => {
+        const name = token.name?.toLowerCase() || '';
+        const symbol = token.symbol?.toLowerCase() || '';
+        const firstLetter = searchTerm.charAt(0);
+        
+        return name.startsWith(firstLetter) || symbol.startsWith(firstLetter);
+      });
+      
+      // Perform actual search
+      const searchResults = await this.tokensService.searchTokensAdvanced(query, 20);
+      
+      const diagnostic = {
+        query,
+        timestamp: new Date().toISOString(),
+        results: {
+          found: searchResults.data.length,
+          searchType: searchResults.searchType,
+          totalMatches: searchResults.totalMatches,
+          tokens: searchResults.data.slice(0, 5).map(t => ({
+            name: t.name,
+            symbol: t.symbol,
+            mint: t.mint.slice(0, 8) + '...'
+          }))
+        },
+        suggestions: searchResults.suggestions || [],
+        relatedTokens: searchResults.relatedTokens?.slice(0, 5).map(t => ({
+          name: t.name,
+          symbol: t.symbol
+        })) || [],
+        sampleData: {
+          totalTokensFetched: sampleTokens.data.length,
+          uniqueFirstLetters: Array.from(firstLetters).sort(),
+          sampleTokenNames: sampleTokens.data.slice(0, 20).map(t => t.name),
+          tokensStartingWithSameLetter: potentialMatches.slice(0, 10).map(t => ({
+            name: t.name,
+            symbol: t.symbol
+          }))
+        },
+        searchSuggestions: this.generateSearchSuggestions(sampleTokens.data, query),
+        apiStatus: {
+          working: sampleTokens.data.length > 0,
+          message: sampleTokens.data.length > 0 
+            ? `API is working, fetched ${sampleTokens.data.length} tokens`
+            : 'API might be down or rate limited'
+        }
+      };
+      
+      this.logger.log(`Diagnostic complete:`, JSON.stringify(diagnostic, null, 2));
+      
+      return {
+        success: true,
+        diagnostic
+      };
+    } catch (error) {
+      this.logger.error('Search diagnostic failed:', error);
+      return {
+        success: false,
+        error: error.message,
+        diagnostic: {
+          query,
+          error: 'Diagnostic failed',
+          suggestion: 'Check backend logs for details'
+        }
+      };
+    }
+  }
+
+  /**
+   * Debug endpoint - List all available tokens
+   */
+  @Get('debug/list-all')
+  async listAllTokens(
+    @Query('limit') limit = 100,
+    @Query('offset') offset = 0
+  ) {
+    try {
+      this.logger.log(`Fetching all available tokens - limit: ${limit}, offset: ${offset}`);
+      
+      // Fetch tokens from the API
+      const result = await this.tokensService.getTrendingTokens(Number(limit), Number(offset));
+      
+      return {
+        success: true,
+        total: result.data.length,
+        tokens: result.data.map(t => ({
+          name: t.name,
+          symbol: t.symbol,
+          mint: t.mint,
+          marketCap: t.usd_market_cap,
+          created: new Date(t.created_timestamp * 1000).toISOString(),
+          isLive: t.is_currently_live,
+          isComplete: t.complete
+        })),
+        message: `Showing ${result.data.length} tokens (offset: ${offset})`
+      };
+    } catch (error) {
+      this.logger.error('Failed to list tokens:', error);
+      return {
+        success: false,
+        error: error.message,
+        tokens: []
+      };
+    }
+  }
+
+  /**
+   * Helper method to generate search suggestions
+   */
+  private generateSearchSuggestions(tokens: any[], query: string): string[] {
+    const suggestions = new Set<string>();
+    
+    // Get some popular token names as suggestions
+    tokens.slice(0, 20).forEach(token => {
+      if (token.name && token.name.length > 2) {
+        // Take first word of multi-word names
+        const firstWord = token.name.split(' ')[0];
+        if (firstWord.length <= 20) {
+          suggestions.add(firstWord);
+        }
+      }
+      if (token.symbol && token.symbol.length <= 10) {
+        suggestions.add(token.symbol);
+      }
+    });
+    
+    return Array.from(suggestions).slice(0, 10);
   }
 }
