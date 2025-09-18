@@ -7,6 +7,7 @@ import TokenDetailPage from './pages/token/TokenDetailPage';
 import ProfilePage from './pages/profile/ProfilePage';
 import { pumpService } from './services/api/pumpService';
 import SystemStatus from './components/common/SystemStatus';
+import DebugPanel from './components/debug/DebugPanel';
 
 function AppContent() {
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
@@ -45,7 +46,7 @@ function AppContent() {
             Cannot connect to the backend server. Please ensure:
           </p>
           <ul className="list-disc list-inside text-gray-400 space-y-1 mb-4">
-            <li>Backend is running on port 3000</li>
+            <li>Backend is running on port 8000</li>
             <li>Run: <code className="bg-gray-800 px-2 py-1 rounded">npm run start:dev</code></li>
             <li>Check console for error details</li>
           </ul>
@@ -79,6 +80,7 @@ function App() {
     <>
       <AppContent />
       <SystemStatus />
+      {process.env.NODE_ENV === 'development' && <DebugPanel />}
     </>
   );
 }
