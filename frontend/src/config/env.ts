@@ -1,44 +1,23 @@
-interface ImportMetaEnv {
-  readonly VITE_API_URL: string
-  readonly VITE_PUMP_API_URL: string
-  readonly VITE_WS_URL: string
-  readonly VITE_SOLANA_NETWORK: string
-  readonly VITE_SOLANA_RPC_URL: string
-  readonly VITE_PRIVY_APP_ID: string
-}
-
-// Safe environment variable access
-const getEnvVar = (key: string, defaultValue: string): string => {
-  if (typeof window !== 'undefined') {
-    // Client-side - try to get from build-time environment
-    try {
-      const env = (import.meta as any).env
-      return env?.[key] || defaultValue
-    } catch {
-      return defaultValue
-    }
-  }
-  return defaultValue
-}
-
-const isDev = () => {
-  try {
-    return (import.meta as any).env?.MODE === 'development' || process.env.NODE_ENV === 'development'
-  } catch {
-    return true // Default to dev in case of errors
-  }
-}
-
 export const ENV = {
-  API_URL: getEnvVar('VITE_API_URL', 'http://localhost:8000'),
-  PUMP_API_URL: getEnvVar('VITE_PUMP_API_URL', 'https://frontend-api.pump.fun'),
-  WS_URL: getEnvVar('VITE_WS_URL', 'ws://localhost:8000'),
-  SOLANA_NETWORK: getEnvVar('VITE_SOLANA_NETWORK', 'mainnet-beta'),
-  SOLANA_RPC_URL: getEnvVar('VITE_SOLANA_RPC_URL', 'https://api.mainnet-beta.solana.com'), 
-  // Add missing properties:
-  SOLANA_RPC: getEnvVar('VITE_SOLANA_RPC_URL', 'https://api.mainnet-beta.solana.com'),
-  PRIVY_APP_ID: getEnvVar('VITE_PRIVY_APP_ID', ''),
-  IS_DEV: isDev(),
-} as const
+  API_URL: import.meta.env.VITE_API_URL || 'http://localhost:3000',
+  WS_URL: import.meta.env.VITE_WS_URL || 'ws://localhost:3000',
+  SOLANA_NETWORK: import.meta.env.VITE_SOLANA_NETWORK || 'mainnet-beta',
+  SOLANA_RPC_URL: import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
+  APP_NAME: 'TRIGGER Terminal',
+  APP_VERSION: '1.0.0',
+  ENABLE_DEBUG: import.meta.env.VITE_ENABLE_DEBUG === 'true' || import.meta.env.DEV,
+  ENABLE_MOCK_DATA: import.meta.env.VITE_ENABLE_MOCK_DATA === 'true',
+  DEFAULT_SLIPPAGE: 1,
+  DEFAULT_PRIORITY_FEE: 0.00001,
+  LAMPORTS_PER_SOL: 1_000_000_000,
+  REFRESH_INTERVAL: 30000,
+  PRICE_REFRESH_INTERVAL: 5000,
+  MIN_SOL_AMOUNT: 0.001,
+  MAX_SOL_AMOUNT: 1000,
+};
 
-export default ENV
+// Log configuration
+console.log(`🚀 ${ENV.APP_NAME} v${ENV.APP_VERSION}`);
+console.log(`📍 Backend API: ${ENV.API_URL}`);
+console.log(`🌐 Solana Network: ${ENV.SOLANA_NETWORK}`);
+console.log(`⚙️ Environment: ${import.meta.env.MODE}`);

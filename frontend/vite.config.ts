@@ -1,54 +1,55 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import path from 'path'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { nodePolyfills } from 'vite-plugin-node-polyfills';
+import path from 'path';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    nodePolyfills({
+      include: ['buffer', 'crypto', 'stream', 'util'],
+      globals: {
+        Buffer: true,
+        global: true,
+        process: true,
+      },
+      protocolImports: true,
+    }),
+  ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, 'src'),
+      '@': path.resolve(__dirname, './src'),
     },
   },
-  build: {
-    target: 'ES2020',
-    outDir: 'dist',
-    sourcemap: true,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          ui: ['lucide-react'],
-        },
-      },
-    },
+  define: {
+    global: 'globalThis',
+    'process.env': {},
   },
   server: {
     port: 5173,
     host: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000', // Changed from 3000 to 8000
-        changeOrigin: true,
-        secure: false,
-      },
-      '/pump': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/tokens': {
-        target: 'http://localhost:8000',
+        target: 'http://localhost:3000',
         changeOrigin: true,
         secure: false,
       },
     },
     allowedHosts: [
-      'localhost',
-      '127.0.0.1',
-      'cf88a249f941.ngrok-free.app',
+      'cf88a249f941.ngrok-free.app', 
     ],
   },
-  define: {
-    global: 'globalThis',
+  build: {
+    target: 'esnext',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          router: ['react-router-dom'],
+          solana: ['@solana/web3.js', '@coral-xyz/anchor'],
+          ui: ['lucide-react', 'clsx', 'tailwind-merge'],
+        },
+      },
+    },
   },
-})
+});

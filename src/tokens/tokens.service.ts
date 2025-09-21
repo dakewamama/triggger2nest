@@ -76,79 +76,171 @@ export interface MarketStats {
 export class TokensService {
   private readonly logger = new Logger(TokensService.name);
   
-  // Using PumpPortal - reliable third-party API
-  private readonly PUMPPORTAL_BASE = 'https://pumpportal.fun/api';
-  
-  // Official pump.fun API endpoints
-  private readonly PUMP_API_BASE = 'https://frontend-api.pump.fun';
-  
-  // Fallback APIs if needed
-  private readonly PUMP_API_FALLBACKS = [
-    'https://frontend-api-v2.pump.fun',
-    'https://frontend-api-v3.pump.fun',
-    'https://api.pump.fun/api'
+  // Updated API configurations with working endpoints
+  private readonly API_CONFIGS = [
+    {
+      name: 'pump.fun v3',
+      baseUrl: 'https://frontend-api.pump.fun',
+      endpoints: {
+        coins: '/coins',
+        coinDetails: '/coins',
+        search: '/coins',
+        trades: '/trades',
+        kingOfHill: '/coins/king-of-the-hill'
+      }
+    },
+    {
+      name: 'pump.fun v2',
+      baseUrl: 'https://frontend-api-v2.pump.fun',
+      endpoints: {
+        coins: '/coins',
+        coinDetails: '/coins',
+        search: '/coins',
+        trades: '/trades'
+      }
+    },
+    {
+      name: 'pump.fun v1',
+      baseUrl: 'https://frontend-api.pump.fun',
+      endpoints: {
+        coins: '/coins',
+        coinDetails: '/coins',
+        search: '/coins',
+        trades: '/trades'
+      }
+    }
   ];
 
-  // Cache for tokens (for fallback search and performance)
+  // PumpPortal configuration with correct endpoints
+  private readonly PUMPPORTAL_CONFIG = {
+    name: 'PumpPortal',
+    baseUrl: 'https://pumpportal.fun/api',
+    endpoints: {
+      coins: '/coins',
+      coinDetails: '/coins',
+      trades: '/trades',
+      stats: '/stats'
+    }
+  };
+
+  // Cache for tokens
   private tokenCache: Map<string, { tokens: PumpFunToken[], timestamp: number }> = new Map();
   private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   /**
-   * Call PumpPortal API with error handling
+   * Enhanced API caller with proper error handling and success detection
    */
-  private async callPumpPortalAPI(endpoint: string, params: any = {}): Promise<any> {
+  private async callAPI(config: any, endpoint: string, params: any = {}): Promise<any> {
+    const url = `${config.baseUrl}${endpoint}`;
+    
     try {
-      const response = await axios.get(`${this.PUMPPORTAL_BASE}${endpoint}`, {
+      this.logger.log(`Attempting ${config.name}: ${url}`);
+      
+      const response = await axios.get(url, {
         params,
         timeout: 10000,
         headers: {
           'Accept': 'application/json',
-          'User-Agent': 'PumpFunController/1.0'
+          'User-Agent': 'PumpFunController/1.0',
+          'Origin': 'https://pump.fun',
+          'Referer': 'https://pump.fun/'
+        },
+        validateStatus: (status) => {
+          // Accept 200-299 as success
+          return status >= 200 && status < 300;
         }
       });
-      return response.data;
+
+      // Check if response has data
+      if (response.status === 200 && response.data) {
+        this.logger.log(`✅ ${config.name} succeeded with ${JSON.stringify(response.data).length} chars`);
+        return response.data;
+      } else {
+        throw new Error(`Invalid response: status ${response.status}, no data`);
+      }
+
     } catch (error) {
-      this.logger.error(`PumpPortal API call failed for ${endpoint}:`, error.message);
-      throw error;
+      if (error.response) {
+        this.logger.warn(`❌ ${config.name} failed: ${error.response.status} - ${error.message}`);
+        throw new Error(`${error.response.status} - ${error.message}`);
+      } else if (error.request) {
+        this.logger.warn(`❌ ${config.name} failed: Network error - ${error.message}`);
+        throw new Error(`Network error - ${error.message}`);
+      } else {
+        this.logger.warn(`❌ ${config.name} failed: ${error.message}`);
+        throw error;
+      }
     }
   }
 
   /**
-   * Call pump.fun API with automatic fallback
+   * Try multiple APIs with fallback logic
    */
-  private async callFallbackAPI(endpoint: string, params: any = {}): Promise<any> {
-    // Try main API first
-    try {
-      this.logger.log(`Trying main API: ${this.PUMP_API_BASE}${endpoint}`);
-      const response = await axios.get(`${this.PUMP_API_BASE}${endpoint}`, {
-        params,
-        timeout: 8000,
-        headers: {
-          'Accept': 'application/json',
-        }
-      });
-      this.logger.log(`Main API succeeded`);
-      return response.data;
-    } catch (error) {
-      this.logger.warn(`Main API failed: ${error.message}`);
-    }
+  private async callWithFallback(endpoint: string, params: any = {}): Promise<any> {
+    const errors: string[] = [];
 
-    // Try fallback APIs
-    for (const baseUrl of this.PUMP_API_FALLBACKS) {
+    // Try main pump.fun APIs first
+    for (const config of this.API_CONFIGS) {
       try {
-        this.logger.log(`Trying fallback API: ${baseUrl}${endpoint}`);
-        const response = await axios.get(`${baseUrl}${endpoint}`, {
-          params,
-          timeout: 8000,
-        });
-        this.logger.log(`Fallback API ${baseUrl} succeeded`);
-        return response.data;
+        if (config.endpoints[endpoint.replace('/', '')]) {
+          const result = await this.callAPI(config, config.endpoints[endpoint.replace('/', '')], params);
+          return result;
+        }
       } catch (error) {
-        this.logger.warn(`Fallback API ${baseUrl} failed:`, error.message);
+        errors.push(`${config.name}: ${error.message}`);
         continue;
       }
     }
-    throw new Error('All fallback APIs failed');
+
+    // Try PumpPortal as fallback
+    try {
+      this.logger.log(`Attempting PumpPortal: ${this.PUMPPORTAL_CONFIG.baseUrl}`);
+      
+      // PumpPortal has different endpoint structure
+      const pumpPortalEndpoint = this.PUMPPORTAL_CONFIG.endpoints[endpoint.replace('/', '')] || endpoint;
+      const result = await this.callAPI(this.PUMPPORTAL_CONFIG, pumpPortalEndpoint, params);
+      return result;
+    } catch (error) {
+      errors.push(`PumpPortal: ${error.message}`);
+    }
+
+    // All APIs failed
+    this.logger.error(`❌ All APIs failed for ${endpoint}:`);
+    errors.forEach(error => this.logger.error(`  - ${error}`));
+    throw new Error(`All APIs failed. Last errors: ${errors.join('; ')}`);
+  }
+
+  /**
+   * Health check for all APIs
+   */
+  async checkAPIHealth(): Promise<{ [key: string]: boolean }> {
+    this.logger.log('🔍 Performing API health check...');
+    
+    const health: { [key: string]: boolean } = {};
+
+    // Check pump.fun APIs
+    for (const config of this.API_CONFIGS) {
+      try {
+        await this.callAPI(config, '/coins', { limit: 1 });
+        health[config.name] = true;
+        this.logger.log(`✅ ${config.name} is healthy`);
+      } catch (error) {
+        health[config.name] = false;
+        this.logger.warn(`❌ ${config.name} is down: ${error.message}`);
+      }
+    }
+
+    // Check PumpPortal
+    try {
+      await this.callAPI(this.PUMPPORTAL_CONFIG, '/coins', { limit: 1 });
+      health[this.PUMPPORTAL_CONFIG.name] = true;
+      this.logger.log(`✅ ${this.PUMPPORTAL_CONFIG.name} is healthy`);
+    } catch (error) {
+      health[this.PUMPPORTAL_CONFIG.name] = false;
+      this.logger.warn(`❌ ${this.PUMPPORTAL_CONFIG.name} is down: ${error.message}`);
+    }
+
+    return health;
   }
 
   /**
@@ -158,13 +250,9 @@ export class TokensService {
     const s1 = str1.toLowerCase();
     const s2 = str2.toLowerCase();
     
-    // Exact match
     if (s1 === s2) return 1;
-    
-    // Contains match
     if (s1.includes(s2) || s2.includes(s1)) return 0.8;
     
-    // Levenshtein distance for fuzzy matching
     const matrix: number[][] = [];
     
     for (let i = 0; i <= s2.length; i++) {
@@ -215,14 +303,11 @@ export class TokensService {
     let validCaches = 0;
     let expiredCaches = 0;
     
-    // Collect all cached tokens
     for (const [key, cache] of this.tokenCache.entries()) {
-      // Check if cache is still valid
       if (Date.now() - cache.timestamp < this.CACHE_DURATION) {
         allCachedTokens = allCachedTokens.concat(cache.tokens);
         validCaches++;
       } else {
-        // Remove expired cache
         this.tokenCache.delete(key);
         expiredCaches++;
       }
@@ -230,12 +315,10 @@ export class TokensService {
     
     this.logger.debug(`📦 Cache status: ${validCaches} valid, ${expiredCaches} expired, ${allCachedTokens.length} total tokens`);
     
-    // Remove duplicates
     const uniqueTokens = Array.from(
       new Map(allCachedTokens.map(token => [token.mint, token])).values()
     );
     
-    // Filter based on search query
     const filteredTokens = uniqueTokens.filter(token => {
       const nameMatch = token.name?.toLowerCase().includes(searchTerm);
       const symbolMatch = token.symbol?.toLowerCase().includes(searchTerm);
@@ -256,9 +339,8 @@ export class TokensService {
     try {
       this.logger.log(`Fetching featured tokens - limit: ${limit}, offset: ${offset}`);
       
-      // Try to get King of the Hill tokens (featured)
       try {
-        const data = await this.callFallbackAPI('/coins/king-of-the-hill', {
+        const data = await this.callWithFallback('kingOfHill', {
           offset,
           limit,
           includeNsfw: false,
@@ -268,13 +350,11 @@ export class TokensService {
         this.updateTokenCache('featured', data);
         return { data };
       } catch (error) {
-        // Fallback to trending as featured
         this.logger.warn('Featured endpoint failed, using trending as fallback');
         return this.getTrendingTokens(limit, offset);
       }
     } catch (error) {
       this.logger.error('All featured token APIs failed:', error.message);
-      // Try cache
       const cached = this.searchCachedTokens('', limit);
       return { data: cached };
     }
@@ -287,7 +367,7 @@ export class TokensService {
     try {
       this.logger.log(`Fetching trending tokens - limit: ${limit}, offset: ${offset}`);
       
-      const data = await this.callFallbackAPI('/coins', {
+      const data = await this.callWithFallback('coins', {
         offset,
         limit,
         sort: 'market_cap',
@@ -295,14 +375,12 @@ export class TokensService {
         includeNsfw: false,
       });
       
-      // Cache the tokens for search fallback
       this.updateTokenCache('trending', data);
       
       this.logger.log(`Fetched ${data.length} trending tokens`);
       return { data };
     } catch (error) {
       this.logger.error('All trending token APIs failed:', error.message);
-      // Try cache
       const cached = this.searchCachedTokens('', limit);
       return { data: cached };
     }
@@ -315,7 +393,7 @@ export class TokensService {
     try {
       this.logger.log(`Fetching new tokens - limit: ${limit}, offset: ${offset}`);
       
-      const data = await this.callFallbackAPI('/coins', {
+      const data = await this.callWithFallback('coins', {
         offset,
         limit,
         sort: 'created_timestamp',
@@ -323,14 +401,12 @@ export class TokensService {
         includeNsfw: false,
       });
       
-      // Cache the tokens for search fallback
       this.updateTokenCache('new', data);
       
       this.logger.log(`Fetched ${data.length} new tokens`);
       return { data };
     } catch (error) {
       this.logger.error('All new token APIs failed:', error.message);
-      // Try cache
       const cached = this.searchCachedTokens('', limit);
       return { data: cached };
     }
@@ -361,8 +437,7 @@ export class TokensService {
         totalMatches: 0
       };
 
-      // ========== 1. CHECK IF IT'S A CONTRACT ADDRESS ==========
-      // CA can be full address or partial (first/last 8 chars)
+      // Check if it's a contract address
       const looksLikeCa = /^[a-zA-Z0-9]{32,44}$/.test(searchTerm) || 
                           (/^[a-zA-Z0-9]{6,}$/.test(searchTerm) && searchTerm.length > 10);
       
@@ -370,7 +445,6 @@ export class TokensService {
         this.logger.log(`🔑 Detected possible Contract Address: ${searchTerm}`);
         results.searchType = 'ca';
         
-        // Try exact match first
         if (searchTerm.length >= 32) {
           try {
             const tokenResult = await this.getTokenDetails(searchTerm);
@@ -384,56 +458,45 @@ export class TokensService {
             this.logger.debug(`No exact CA match for ${searchTerm}`);
           }
         }
-        
-        // For partial CA, we'll search in the fetched tokens below
-        this.logger.log(`📝 Will search for partial CA match: ${searchTerm}`);
       }
 
-      // ========== 2. TRY DIRECT API SEARCH ==========
+      // Try direct API search first
       try {
         this.logger.log(`[Method 1] Attempting direct API search for: "${query}"`);
         
-        const searchEndpoints = [
-          '/coins/search',
-          '/search',
-          '/tokens/search'
-        ];
-
-        for (const endpoint of searchEndpoints) {
-          try {
-            const data = await this.callFallbackAPI(endpoint, {
-              q: query,
-              query: query,
-              search: query,
-              limit,
-              includeNsfw: false,
-            });
-            
-            if (data && data.length > 0) {
-              this.logger.log(`✅ Found ${data.length} tokens via ${endpoint}`);
-              results.data = data.slice(0, limit);
-              results.totalMatches = data.length;
-              results.searchType = 'exact';
-              return results;
-            }
-          } catch (endpointError) {
-            this.logger.debug(`Search endpoint ${endpoint} failed:`, endpointError.message);
+        // Try search endpoint
+        try {
+          const searchData = await this.callWithFallback('search', {
+            q: query,
+            query: query,
+            search: query,
+            limit,
+            includeNsfw: false,
+          });
+          
+          if (searchData && searchData.length > 0) {
+            this.logger.log(`✅ Found ${searchData.length} tokens via search endpoint`);
+            results.data = searchData.slice(0, limit);
+            results.totalMatches = searchData.length;
+            results.searchType = 'exact';
+            return results;
           }
+        } catch (searchError) {
+          this.logger.debug(`Search endpoint failed: ${searchError.message}`);
         }
       } catch (apiError) {
-        this.logger.warn(`Direct API search failed for "${query}":`, apiError.message);
+        this.logger.warn(`Direct API search failed for "${query}": ${apiError.message}`);
       }
 
-      // ========== 3. FETCH TOKEN DATA FOR LOCAL SEARCH ==========
+      // Fetch and filter approach
       this.logger.log(`📊 Using fetch-and-filter search for: "${query}"`);
       
-      // Fetch multiple pages to get more tokens
       const fetchPromises = [];
       
-      // Fetch by market cap (3 pages)
+      // Fetch multiple pages
       for (let page = 0; page < 3; page++) {
         fetchPromises.push(
-          this.callFallbackAPI('/coins', { 
+          this.callWithFallback('coins', { 
             limit: 200, 
             offset: page * 200,
             includeNsfw: false,
@@ -448,7 +511,7 @@ export class TokensService {
       
       // Also fetch newest tokens
       fetchPromises.push(
-        this.callFallbackAPI('/coins', { 
+        this.callWithFallback('coins', { 
           limit: 100, 
           offset: 0,
           includeNsfw: false,
@@ -465,38 +528,35 @@ export class TokensService {
       
       let allTokens: PumpFunToken[] = [];
       
-      // Collect all successful results
       for (const result of fetchResults) {
         if (result.status === 'fulfilled' && result.value) {
           allTokens = allTokens.concat(result.value);
         }
       }
 
-      // Deduplicate
       const uniqueTokens = Array.from(
         new Map(allTokens.map(token => [token.mint, token])).values()
       );
       
       this.logger.log(`✅ Fetched ${uniqueTokens.length} unique tokens from API`);
 
-      // ========== 4. PERFORM SEARCH ==========
+      // Perform local search
       const exactMatches: PumpFunToken[] = [];
       const fuzzyMatches: PumpFunToken[] = [];
       const partialMatches: PumpFunToken[] = [];
       const relatedTokens: PumpFunToken[] = [];
 
-      // Track all search scores
       const tokenScores = new Map<string, { token: PumpFunToken, score: number, matchType: string }>();
 
       for (const token of uniqueTokens) {
         let bestScore = 0;
         let matchType = 'none';
         
-        // Check CA match (for partial CA searches)
+        // CA matching
         if (looksLikeCa) {
           const mintLower = token.mint.toLowerCase();
           if (mintLower === searchTerm) {
-            bestScore = 1.2; // Highest priority for exact CA
+            bestScore = 1.2;
             matchType = 'ca_exact';
           } else if (mintLower.startsWith(searchTerm) || mintLower.endsWith(searchTerm)) {
             bestScore = 0.95;
@@ -522,12 +582,12 @@ export class TokensService {
           matchType = matchType === 'none' ? 'fuzzy_name' : matchType;
         }
         
-        // Symbol matching (higher weight for symbol matches)
+        // Symbol matching
         const symbolLower = token.symbol?.toLowerCase() || '';
         const symbolScore = this.calculateSimilarity(symbolLower, searchTerm);
         
         if (symbolLower === searchTerm) {
-          bestScore = Math.max(bestScore, 1.1); // Slightly higher than name match
+          bestScore = Math.max(bestScore, 1.1);
           matchType = bestScore === 1.1 ? 'exact_symbol' : matchType;
         } else if (symbolLower.includes(searchTerm)) {
           bestScore = Math.max(bestScore, 0.85);
@@ -537,7 +597,7 @@ export class TokensService {
           matchType = matchType === 'none' ? 'fuzzy_symbol' : matchType;
         }
         
-        // Description matching (lower weight)
+        // Description matching
         const descLower = token.description?.toLowerCase() || '';
         if (descLower.includes(searchTerm)) {
           bestScore = Math.max(bestScore, 0.6);
@@ -556,11 +616,9 @@ export class TokensService {
           }
         }
         
-        // Store token with its score
         if (bestScore > 0.5) {
           tokenScores.set(token.mint, { token, score: bestScore, matchType });
           
-          // Categorize matches
           if (bestScore >= 1) {
             exactMatches.push(token);
           } else if (bestScore >= 0.8) {
@@ -573,8 +631,7 @@ export class TokensService {
         }
       }
 
-      // ========== 5. COMPILE RESULTS ==========
-      // Sort each category by market cap
+      // Sort by market cap
       const sortByMarketCap = (a: PumpFunToken, b: PumpFunToken) => 
         (b.usd_market_cap || 0) - (a.usd_market_cap || 0);
       
@@ -583,7 +640,7 @@ export class TokensService {
       partialMatches.sort(sortByMarketCap);
       relatedTokens.sort(sortByMarketCap);
       
-      // Combine results (exact > fuzzy > partial)
+      // Combine results
       results.data = [
         ...exactMatches.slice(0, Math.min(10, limit)),
         ...fuzzyMatches.slice(0, Math.min(5, limit - exactMatches.length)),
@@ -593,7 +650,6 @@ export class TokensService {
       results.totalMatches = exactMatches.length + fuzzyMatches.length + partialMatches.length;
       results.relatedTokens = relatedTokens.slice(0, 5);
       
-      // Determine search type
       if (exactMatches.length > 0) {
         results.searchType = 'exact';
       } else if (fuzzyMatches.length > 0) {
@@ -602,12 +658,10 @@ export class TokensService {
         results.searchType = 'partial';
       }
 
-      // ========== 6. GENERATE SUGGESTIONS ==========
+      // Generate suggestions
       if (results.data.length === 0) {
-        // No matches found - generate suggestions
         const suggestions = new Set<string>();
         
-        // Find tokens with similar starting letters
         const firstChar = searchTerm.charAt(0);
         const similarTokens = uniqueTokens.filter(token => 
           token.name?.toLowerCase().startsWith(firstChar) ||
@@ -627,17 +681,14 @@ export class TokensService {
         
         this.logger.log(`💡 No exact matches. Generated ${results.suggestions.length} suggestions`);
       } else {
-        // Found matches - suggest related searches
         const suggestions = new Set<string>();
         
-        // Add symbols of top matches as suggestions
         results.data.slice(0, 5).forEach(token => {
           if (token.symbol && token.symbol.toLowerCase() !== searchTerm) {
             suggestions.add(token.symbol);
           }
         });
         
-        // Add related token names
         relatedTokens.slice(0, 5).forEach(token => {
           if (token.name && suggestions.size < 8) {
             suggestions.add(token.name);
@@ -647,7 +698,6 @@ export class TokensService {
         results.suggestions = Array.from(suggestions);
       }
 
-      // ========== 7. LOG RESULTS ==========
       this.logger.log(`📊 Search Results Summary:`);
       this.logger.log(`  Query: "${query}"`);
       this.logger.log(`  Search Type: ${results.searchType}`);
@@ -671,9 +721,8 @@ export class TokensService {
       return results;
 
     } catch (error) {
-      this.logger.error(`❌ Advanced search failed for "${query}":`, error.message);
+      this.logger.error(`❌ Advanced search failed for "${query}": ${error.message}`);
       
-      // Last resort: Use cached tokens if available
       const cachedResults = this.searchCachedTokens(query, limit);
       
       return {
@@ -686,7 +735,7 @@ export class TokensService {
   }
 
   /**
-   * Standard search - wrapper for advanced search
+   * Standard search wrapper
    */
   async searchTokens(query: string, limit = 20): Promise<{ data: PumpFunToken[] }> {
     const advancedResults = await this.searchTokensAdvanced(query, limit);
@@ -700,11 +749,11 @@ export class TokensService {
     try {
       this.logger.log(`Fetching token details for mint: ${mint}`);
       
-      const data = await this.callFallbackAPI(`/coins/${mint}`, {});
+      const data = await this.callWithFallback('coinDetails', { mint });
       this.logger.log(`Fetched token details: ${data?.name || 'Unknown'}`);
       return { data };
     } catch (error) {
-      this.logger.error(`Failed to fetch token details for ${mint}:`, error.message);
+      this.logger.error(`Failed to fetch token details for ${mint}: ${error.message}`);
       return { data: null };
     }
   }
@@ -716,7 +765,8 @@ export class TokensService {
     try {
       this.logger.log(`Fetching trades for token: ${mint} - limit: ${limit}, offset: ${offset}`);
       
-      const data = await this.callFallbackAPI(`/trades/all/${mint}`, {
+      const data = await this.callWithFallback('trades', {
+        mint,
         offset,
         limit,
       });
@@ -724,7 +774,7 @@ export class TokensService {
       this.logger.log(`Fetched ${data.length} trades for token: ${mint}`);
       return { data };
     } catch (error) {
-      this.logger.warn(`No trades found for token ${mint}`);
+      this.logger.warn(`No trades found for token ${mint}: ${error.message}`);
       return { data: [] };
     }
   }
@@ -736,11 +786,11 @@ export class TokensService {
     try {
       this.logger.log(`Fetching latest trades - limit: ${limit}`);
       
-      const data = await this.callFallbackAPI('/trades/latest', { limit });
+      const data = await this.callWithFallback('trades', { limit });
       this.logger.log(`Fetched ${data.length} latest trades`);
       return { data };
     } catch (error) {
-      this.logger.warn('No latest trades available');
+      this.logger.warn(`No latest trades available: ${error.message}`);
       return { data: [] };
     }
   }
@@ -752,7 +802,6 @@ export class TokensService {
     try {
       this.logger.log('Fetching SOL price');
       
-      // Try CoinGecko directly (most reliable)
       try {
         const response = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd', {
           timeout: 5000,
@@ -763,7 +812,7 @@ export class TokensService {
         return { data: { price } };
       } catch (coinGeckoError) {
         this.logger.warn('CoinGecko failed, using fallback price');
-        return { data: { price: 100 } }; // Fallback price
+        return { data: { price: 100 } };
       }
     } catch (error) {
       this.logger.error('Failed to fetch SOL price:', error.message);
@@ -778,7 +827,6 @@ export class TokensService {
     try {
       this.logger.log('Calculating market stats from real token data');
       
-      // Get trending tokens to calculate stats
       const trendingResult = await this.getTrendingTokens(100);
       const tokens = trendingResult.data;
       
@@ -800,7 +848,6 @@ export class TokensService {
       const successfulGraduations = tokens.filter(token => token.complete).length;
       const totalVolume24h = tokens.reduce((sum, token) => sum + (token.volume_24h || 0), 0);
       
-      // Count new tokens in last 24 hours
       const oneDayAgo = Date.now() / 1000 - 86400;
       const newTokensLast24h = tokens.filter(token => 
         token.created_timestamp > oneDayAgo
@@ -815,7 +862,7 @@ export class TokensService {
         last24Hours: {
           newTokens: newTokensLast24h,
           volume: totalVolume24h,
-          trades: 0 // Would need trades endpoint to calculate
+          trades: 0
         }
       };
       
