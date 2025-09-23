@@ -1,0 +1,326 @@
+/* frontend/src/styles/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-terminal-bg text-white;
+    font-family: 'JetBrains Mono', monospace;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Orbitron', sans-serif;
+    @apply font-bold;
+  }
+
+  /* Selection Colors */
+  ::selection {
+    @apply bg-neon-lime text-terminal-bg;
+  }
+
+  ::-moz-selection {
+    @apply bg-neon-lime text-terminal-bg;
+  }
+}
+
+@layer components {
+  /* Neon Glow Effects */
+  .neon-glow {
+    box-shadow: 
+      0 0 5px currentColor, 
+      0 0 10px currentColor, 
+      0 0 20px currentColor,
+      0 0 40px currentColor;
+  }
+
+  .neon-glow-sm {
+    box-shadow: 
+      0 0 5px currentColor, 
+      0 0 10px currentColor;
+  }
+  
+  .neon-text {
+    text-shadow: 
+      0 0 5px currentColor, 
+      0 0 10px currentColor,
+      0 0 20px currentColor;
+  }
+
+  .neon-text-sm {
+    text-shadow: 
+      0 0 5px currentColor;
+  }
+  
+  /* Terminal Card Component */
+  .terminal-card {
+    @apply bg-terminal-surface border border-terminal-border rounded-lg p-4;
+    @apply hover:border-neon-lime/50 transition-all duration-300;
+    position: relative;
+  }
+
+  .terminal-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, 
+      transparent, 
+      rgba(0, 255, 0, 0.5) 50%, 
+      transparent
+    );
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .terminal-card:hover::before {
+    opacity: 1;
+  }
+  
+  /* Cyber Grid Background */
+  .cyber-grid {
+    background-image: 
+      linear-gradient(rgba(0, 255, 0, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 255, 0, 0.03) 1px, transparent 1px);
+    background-size: 20px 20px;
+    animation: grid-move 10s linear infinite;
+  }
+
+  @keyframes grid-move {
+    0% { background-position: 0 0; }
+    100% { background-position: 20px 20px; }
+  }
+
+  /* Gradient Button */
+  .btn-gradient {
+    @apply bg-gradient-to-r from-neon-lime to-neon-cyan text-terminal-bg font-bold;
+    @apply hover:from-neon-cyan hover:to-neon-lime transition-all duration-300;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Pulse Animations */
+  .pulse-green {
+    animation: pulse-green 2s ease-in-out infinite;
+  }
+
+  .pulse-red {
+    animation: pulse-red 2s ease-in-out infinite;
+  }
+
+  /* Loading Spinner */
+  .loading-spinner {
+    @apply w-6 h-6 border-2 border-neon-lime border-t-transparent rounded-full;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #00ff00 0%, #00ffff 100%);
+  border-radius: 3px;
+  opacity: 0.5;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #00ffff 0%, #ff00ff 100%);
+  opacity: 1;
+}
+
+.custom-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Global Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0f0a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #263326;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #00ff00;
+}
+
+/* Animations */
+@keyframes pulse-green {
+  0%, 100% {
+    color: #00cc00;
+    text-shadow: 0 0 5px rgba(0, 204, 0, 0.5);
+  }
+  50% {
+    color: #00ff00;
+    text-shadow: 0 0 20px rgba(0, 255, 0, 0.8);
+  }
+}
+
+@keyframes pulse-red {
+  0%, 100% {
+    color: #ff3333;
+    text-shadow: 0 0 5px rgba(255, 51, 51, 0.5);
+  }
+  50% {
+    color: #ff6666;
+    text-shadow: 0 0 20px rgba(255, 102, 102, 0.8);
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { 
+    opacity: 0.5; 
+    filter: brightness(1);
+  }
+  50% { 
+    opacity: 1; 
+    filter: brightness(1.2);
+  }
+}
+
+@keyframes text-shimmer {
+  0%, 100% { 
+    background-position: 0% center; 
+  }
+  50% { 
+    background-position: 100% center; 
+  }
+}
+
+/* Shimmer Text Effect */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    #00ff00 0%,
+    #00ffff 25%,
+    #ff00ff 50%,
+    #00ffff 75%,
+    #00ff00 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: text-shimmer 3s linear infinite;
+}
+
+/* Utility Classes */
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-neon-lime to-neon-cyan bg-clip-text text-transparent;
+  }
+
+  .hover-lift {
+    @apply transition-transform duration-300 hover:-translate-y-1;
+  }
+
+  .hover-scale {
+    @apply transition-transform duration-300 hover:scale-105;
+  }
+
+  /* Glow Borders */
+  .border-glow-green {
+    box-shadow: inset 0 0 0 1px rgba(0, 255, 0, 0.5);
+  }
+
+  .border-glow-cyan {
+    box-shadow: inset 0 0 0 1px rgba(0, 255, 255, 0.5);
+  }
+
+  .border-glow-magenta {
+    box-shadow: inset 0 0 0 1px rgba(255, 0, 255, 0.5);
+  }
+}
+
+/* Modal/Dialog Backdrop */
+.backdrop-blur-terminal {
+  backdrop-filter: blur(8px);
+  background: rgba(10, 15, 10, 0.8);
+}
+
+/* Input Focus States */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: #00ff00;
+  box-shadow: 0 0 0 2px rgba(0, 255, 0, 0.2);
+}
+
+/* Button Active States */
+button:active {
+  transform: scale(0.98);
+}
+
+/* Code Blocks */
+code {
+  @apply bg-terminal-border px-2 py-1 rounded text-neon-lime font-mono text-sm;
+}
+
+pre {
+  @apply bg-terminal-surface border border-terminal-border rounded-lg p-4 overflow-x-auto;
+}
+
+pre code {
+  @apply bg-transparent p-0;
+}
+
+/* Responsive Text Sizes */
+@media (max-width: 640px) {
+  .text-responsive {
+    @apply text-sm;
+  }
+}
+
+@media (min-width: 640px) {
+  .text-responsive {
+    @apply text-base;
+  }
+}
+
+@media (min-width: 1024px) {
+  .text-responsive {
+    @apply text-lg;
+  }
+}
+
+/* Transitions */
+* {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Print Styles */
+@media print {
+  body {
+    @apply bg-white text-black;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+}
