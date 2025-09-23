@@ -15,11 +15,7 @@ async function bootstrap() {
     transform: true,
   }));
 
-  // Health check
-  app.use('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-  });
-
+  // EXPLICITLY USE PORT 8000
   const port = 8000;
   await app.listen(port);
   console.log(`Application is running on: http://localhost:${port}`);
