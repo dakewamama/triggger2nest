@@ -1,56 +1,46 @@
-// frontend/src/components/Header.tsx
-import { Link, useLocation } from 'react-router-dom'
-import { WalletMultiButton } from '@/providers/WalletProvider'
-import { Search, TrendingUp, Plus, Home, Zap } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { Link } from 'react-router-dom'
+import { WalletMultiButton } from '../providers/WalletProvider'
+import { Search, TrendingUp, Plus } from 'lucide-react'
 
 export default function Header() {
-  const location = useLocation()
-  
-  const navItems = [
-    { path: '/', label: 'Home', icon: Home },
-    { path: '/trade', label: 'Trade', icon: TrendingUp },
-    { path: '/create', label: 'Create', icon: Plus },
-    { path: '/search', label: 'Search', icon: Search },
-  ]
-
   return (
-    <header className="bg-terminal-surface/80 backdrop-blur-lg border-b border-terminal-border sticky top-0 z-50">
+    <header className="border-b border-terminal-border bg-terminal-bg/80 backdrop-blur-sm sticky top-0 z-50">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 group">
-            <motion.div 
-              whileHover={{ rotate: 360 }}
-              transition={{ duration: 0.5 }}
-              className="w-10 h-10 bg-gradient-to-br from-neon-lime to-neon-cyan rounded-lg flex items-center justify-center"
-            >
-              <Zap className="w-6 h-6 text-black" />
-            </motion.div>
-            <span className="font-display text-xl font-bold">
-              <span className="text-neon-lime">TRIGGER</span>
+          <Link to="/" className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-neon-lime rounded animate-pulse" />
+            <span className="font-display text-xl font-bold text-neon-lime">
+              TRIGGER
             </span>
           </Link>
 
           {/* Navigation */}
-          <nav className="flex items-center gap-6">
-            {navItems.map(({ path, label, icon: Icon }) => (
-              <Link
-                key={path}
-                to={path}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
-                  location.pathname === path
-                    ? 'bg-neon-lime/20 text-neon-lime'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Icon size={18} />
-                <span className="hidden sm:block">{label}</span>
-              </Link>
-            ))}
+          <nav className="hidden md:flex items-center space-x-8">
+            <Link 
+              to="/" 
+              className="flex items-center space-x-2 text-gray-300 hover:text-neon-lime transition-colors"
+            >
+              <TrendingUp className="w-4 h-4" />
+              <span>Trending</span>
+            </Link>
+            <Link 
+              to="/create" 
+              className="flex items-center space-x-2 text-gray-300 hover:text-neon-cyan transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create</span>
+            </Link>
+            <Link 
+              to="/search" 
+              className="flex items-center space-x-2 text-gray-300 hover:text-neon-magenta transition-colors"
+            >
+              <Search className="w-4 h-4" />
+              <span>Search</span>
+            </Link>
           </nav>
 
-          {/* Wallet Button */}
+          {/* Wallet Connection - REAL PHANTOM WALLET */}
           <WalletMultiButton />
         </div>
       </div>

@@ -1,95 +1,121 @@
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { api } from '../services/api'
 import TokenCard from '../components/TokenCard'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
-import { motion } from 'framer-motion'
-import { Sparkles, TrendingUp, Clock } from 'lucide-react'
+import RecentTrades from '../components/RecentTrades'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs'
+import { TrendingUp, Sparkles, Clock } from 'lucide-react'
 
 export default function HomePage() {
-  const [featuredTokens, setFeaturedTokens] = useState([])
-  const [trendingTokens, setTrendingTokens] = useState([])
-  const [newTokens, setNewTokens] = useState([])
+  const [featuredTokens, setFeaturedTokens] = useState<any[]>([])
+  const [trendingTokens, setTrendingTokens] = useState<any[]>([])
+  const [newTokens, setNewTokens] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('trending')
 
   useEffect(() => {
-    Promise.all([
-      api.getFeaturedTokens(),
-      api.getTrendingTokens(),
-      api.getNewTokens()
-    ]).then(([featured, trending, newest]) => {
-      setFeaturedTokens(featured)
-      setTrendingTokens(trending)
-      setNewTokens(newest)
-      setLoading(false)
-    }).catch(console.error)
+    loadTokens()
+    const interval = setInterval(loadTokens, 30000) // Refresh every 30 seconds
+    return () => clearInterval(interval)
   }, [])
 
+  const loadTokens = async () => {
+    try {
+      setLoading(true)
+      console.log('Loading tokens from backend...')
+      
+      const [featured, trending, newTokens] = await Promise.all([
+        api.getFeaturedTokens(10, 0),
+        api.getTrendingTokens(50, 0),
+        api.getNewTokens(50, 0)
+      ])
+
+      console.log('Loaded tokens:', { featured, trending, newTokens })
+      
+      setFeaturedTokens(featured || [])
+      setTrendingTokens(trending || [])
+      setNewTokens(newTokens || [])
+    } catch (error) {
+      console.error('Failed to load tokens:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[400px]">
+        <div className="animate-spin h-8 w-8 border-2 border-green-400 border-t-transparent rounded-full" />
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-8">
-      {/* Hero Section */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="text-center py-12 relative"
-      >
-        <div className="absolute inset-0 cyber-grid opacity-20" />
-        <h1 className="text-5xl font-display font-black mb-4">
-          <span className="shimmer">PUMP.FUN TERMINAL</span>
-        </h1>
-        <p className="text-gray-400 text-lg">Trade Solana memecoins on devnet</p>
-      </motion.div>
+    <div className="container mx-auto px-4 py-6">
+      {/* Featured Tokens */}
+      {featuredTokens.length > 0 && (
+        <section className="mb-8">
+          <h2 className="font-display text-2xl font-bold text-neon-lime mb-4 flex items-center">
+            <Sparkles className="w-6 h-6 mr-2" />
+            Featured Tokens
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {featuredTokens.slice(0, 6).map((token) => (
+              <TokenCard key={token.mint} token={token} />
+            ))}
+          </div>
+        </section>
+      )}
 
-      {/* Token Tabs */}
-      <Tabs defaultValue="trending" className="w-full">
-        <TabsList className="bg-terminal-surface border border-terminal-border">
-          <TabsTrigger value="featured" className="data-[state=active]:bg-neon-gold/20 data-[state=active]:text-neon-gold">
-            <Sparkles size={16} className="mr-2" />
-            Featured
-          </TabsTrigger>
-          <TabsTrigger value="trending" className="data-[state=active]:bg-neon-lime/20 data-[state=active]:text-neon-lime">
-            <TrendingUp size={16} className="mr-2" />
-            Trending
-          </TabsTrigger>
-          <TabsTrigger value="new" className="data-[state=active]:bg-neon-cyan/20 data-[state=active]:text-neon-cyan">
-            <Clock size={16} className="mr-2" />
-            New
-          </TabsTrigger>
-        </TabsList>
+      {/* Token Lists */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList>
+              <TabsTrigger value="trending">
+                <TrendingUp className="w-4 h-4 mr-2" />
+                Trending
+              </TabsTrigger>
+              <TabsTrigger value="new">
+                <Clock className="w-4 h-4 mr-2" />
+                New
+              </TabsTrigger>
+            </TabsList>
 
-        <TabsContent value="featured">
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {[...Array(8)].map((_, i) => (
-                <div key={i} className="terminal-card animate-pulse">
-                  <div className="h-40 bg-terminal-border rounded" />
+            <TabsContent value="trending">
+              {trendingTokens.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  No trending tokens found. Backend might be down or rate limited.
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {featuredTokens.map((token: any) => (
-                <TokenCard key={token.mint} {...token} />
-              ))}
-            </div>
-          )}
-        </TabsContent>
+              ) : (
+                <div className="space-y-4">
+                  {trendingTokens.map((token) => (
+                    <TokenCard key={token.mint} token={token} />
+                  ))}
+                </div>
+              )}
+            </TabsContent>
 
-        <TabsContent value="trending">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {trendingTokens.map((token: any) => (
-              <TokenCard key={token.mint} {...token} />
-            ))}
-          </div>
-        </TabsContent>
+            <TabsContent value="new">
+              {newTokens.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  No new tokens found. Backend might be down or rate limited.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {newTokens.map((token) => (
+                    <TokenCard key={token.mint} token={token} />
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
 
-        <TabsContent value="new">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {newTokens.map((token: any) => (
-              <TokenCard key={token.mint} {...token} />
-            ))}
-          </div>
-        </TabsContent>
-      </Tabs>
+        {/* Recent Trades */}
+        <div>
+          <RecentTrades />
+        </div>
+      </div>
     </div>
   )
 }

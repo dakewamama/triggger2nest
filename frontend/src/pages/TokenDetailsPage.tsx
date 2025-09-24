@@ -1,114 +1,148 @@
-// frontend/src/pages/TokenDetailsPage.tsx
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
+import { toast } from 'sonner'
 import { api } from '@/services/api'
 import TradingPanel from '@/components/TradingPanel'
-import TokenChart from '@/components/TokenChart'
-import { Copy, ExternalLink, Twitter, Globe } from 'lucide-react'
-import { toast } from 'sonner'
+import TokenTrades from '@/components/TokenTrades'
+import { Copy, Twitter, Globe } from 'lucide-react'
+import { formatAddress, formatNumber, formatPrice } from '@/utils/format'
 
 export default function TokenDetailsPage() {
-  const { mint } = useParams()
+  const { mint } = useParams<{ mint: string }>()
   const [token, setToken] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (mint) {
-      api.getTokenDetails(mint)
-        .then(setToken)
-        .finally(() => setLoading(false))
+      loadTokenDetails()
     }
   }, [mint])
 
+  const loadTokenDetails = async () => {
+    try {
+      setLoading(true)
+      const data = await api.getTokenDetails(mint!)
+      setToken(data)
+    } catch (error) {
+      toast.error('Failed to load token details')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const copyAddress = () => {
-    navigator.clipboard.writeText(mint!)
-    toast.success('Address copied!')
+    if (mint) {
+      navigator.clipboard.writeText(mint)
+      toast.success('Address copied!')
+    }
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-pulse text-neon-lime">Loading token data...</div>
+      <div className="flex justify-center items-center min-h-[400px]">
+        <div className="animate-spin h-8 w-8 border-2 border-green-400 border-t-transparent rounded-full" />
       </div>
     )
   }
 
   if (!token) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-red-500">Token not found</div>
+      <div className="text-center py-12">
+        <p className="text-gray-400">Token not found</p>
+        <Link to="/" className="text-green-400 hover:text-green-300 mt-4 inline-block">
+          Back to Home
+        </Link>
       </div>
     )
   }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Token Info */}
       <div className="lg:col-span-2 space-y-6">
-        <div className="terminal-card">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-4">
-              {token.image_uri ? (
-                <img src={token.image_uri} alt={token.symbol} className="w-16 h-16 rounded-full" />
-              ) : (
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-neon-cyan to-neon-magenta flex items-center justify-center text-2xl font-bold">
-                  {token.symbol?.substring(0, 2)}
-                </div>
+        {/* Token Info */}
+        <div className="bg-gray-800 rounded-lg p-6">
+          <div className="flex items-start justify-between mb-6">
+            <div className="flex items-center space-x-4">
+              {token.image_uri && (
+                <img 
+                  src={token.image_uri} 
+                  alt={token.name}
+                  className="w-16 h-16 rounded-full"
+                />
               )}
               <div>
-                <h1 className="text-2xl font-display font-bold">{token.name}</h1>
+                <h1 className="text-2xl font-bold">{token.name}</h1>
                 <p className="text-gray-400">${token.symbol}</p>
               </div>
             </div>
-            
-            <div className="flex items-center gap-2">
+            <div className="flex space-x-2">
               {token.twitter && (
-                <a href={`https://twitter.com/${token.twitter}`} target="_blank" rel="noopener noreferrer">
-                  <Twitter size={20} className="text-gray-400 hover:text-neon-cyan" />
+                <a 
+                  href={token.twitter} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="p-2 bg-gray-700 rounded hover:bg-gray-600"
+                >
+                  <Twitter className="w-4 h-4" />
                 </a>
               )}
               {token.website && (
-                <a href={token.website} target="_blank" rel="noopener noreferrer">
-                  <Globe size={20} className="text-gray-400 hover:text-neon-cyan" />
+                <a 
+                  href={token.website} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="p-2 bg-gray-700 rounded hover:bg-gray-600"
+                >
+                  <Globe className="w-4 h-4" />
                 </a>
               )}
             </div>
           </div>
 
-          <div className="mt-6 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-400">Contract Address</span>
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-sm">{mint?.substring(0, 8)}...{mint?.substring(mint.length - 8)}</span>
-                <button onClick={copyAddress}>
-                  <Copy size={16} className="text-gray-400 hover:text-white" />
+          <p className="text-gray-300 mb-6">{token.description}</p>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-gray-400 text-sm">Market Cap</p>
+              <p className="text-xl font-bold text-green-400">
+                ${formatNumber(token.usd_market_cap)}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-400 text-sm">Price</p>
+              <p className="text-xl font-bold">
+                ${formatPrice(token.price || 0)}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-400 text-sm">Total Supply</p>
+              <p className="text-xl font-bold">
+                {formatNumber(token.total_supply)}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-400 text-sm">Contract Address</p>
+              <div className="flex items-center space-x-2">
+                <p className="text-sm font-mono">
+                  {formatAddress(mint || '')}
+                </p>
+                <button
+                  onClick={copyAddress}
+                  className="p-1 hover:bg-gray-700 rounded"
+                >
+                  <Copy className="w-4 h-4" />
                 </button>
               </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-gray-400">Market Cap</span>
-              <span className="font-mono">${(token.usd_market_cap / 1e6).toFixed(2)}M</span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-gray-400">Total Supply</span>
-              <span className="font-mono">{(token.total_supply / 1e9).toFixed(2)}B</span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-gray-400">Created</span>
-              <span className="font-mono">{new Date(token.created_timestamp * 1000).toLocaleDateString()}</span>
             </div>
           </div>
         </div>
 
-        {/* Chart */}
-        <TokenChart mint={mint!} />
+        {/* Trades */}
+        <TokenTrades mint={mint!} />
       </div>
 
       {/* Trading Panel */}
-      <div className="lg:col-span-1">
+      <div className="lg:sticky lg:top-24">
         <TradingPanel token={token} />
       </div>
     </div>

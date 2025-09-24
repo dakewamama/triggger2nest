@@ -1,67 +1,67 @@
-import { motion } from 'framer-motion'
+import { Link } from 'react-router-dom'
 import { TrendingUp, TrendingDown } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { formatNumber, formatMarketCap, formatPercentage } from '@/utils/format'
 
 interface TokenCardProps {
-  mint: string
-  name: string
-  symbol: string
-  price: number
-  change24h?: number
-  marketCap: number
-  imageUri?: string
+  token: any  // Using any for now since we don't have the exact type
 }
 
-export default function TokenCard({ mint, name, symbol, price, change24h = 0, marketCap, imageUri }: TokenCardProps) {
-  const navigate = useNavigate()
-  const isProfit = change24h >= 0
+export default function TokenCard({ token }: TokenCardProps) {
+  const priceChange = token.price_change_24h || 0
+  const isPositive = priceChange >= 0
 
   return (
-    <motion.div
-      whileHover={{ scale: 1.02, y: -4 }}
-      whileTap={{ scale: 0.98 }}
-      onClick={() => navigate(`/token/${mint}`)}
-      className="bg-terminal-surface border border-terminal-border rounded-lg p-4 cursor-pointer hover:border-neon-lime transition-all group"
+    <Link 
+      to={`/token/${token.mint}`}
+      className="terminal-card hover:border-neon-lime transition-all group"
     >
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
-          {imageUri ? (
-            <img src={imageUri} alt={symbol} className="w-10 h-10 rounded-full" />
-          ) : (
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-neon-cyan to-neon-magenta flex items-center justify-center text-white font-bold">
-              {symbol.substring(0, 2)}
-            </div>
+      <div className="flex items-start justify-between">
+        <div className="flex items-center space-x-3">
+          {token.image_uri && (
+            <img 
+              src={token.image_uri} 
+              alt={token.name}
+              className="w-10 h-10 rounded-full"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none'
+              }}
+            />
           )}
           <div>
-            <h3 className="font-display font-bold text-white group-hover:text-neon-lime transition-colors">
-              {symbol}
+            <h3 className="font-bold text-white group-hover:text-neon-lime transition-colors">
+              {token.name}
             </h3>
-            <p className="text-xs text-gray-500">{name}</p>
+            <p className="text-sm text-gray-400">${token.symbol}</p>
+          </div>
+        </div>
+        
+        <div className="text-right">
+          <p className="font-bold text-white">
+            {formatMarketCap(token.usd_market_cap || 0)}
+          </p>
+          <div className={`flex items-center justify-end text-sm ${
+            isPositive ? 'text-neon-lime' : 'text-neon-magenta'
+          }`}>
+            {isPositive ? (
+              <TrendingUp className="w-3 h-3 mr-1" />
+            ) : (
+              <TrendingDown className="w-3 h-3 mr-1" />
+            )}
+            {formatPercentage(Math.abs(priceChange / 100))}
           </div>
         </div>
       </div>
-
-      <div className="space-y-2">
-        <div className="flex justify-between items-center">
-          <span className="text-gray-400 text-sm">Price</span>
-          <span className="font-mono text-white">${price.toFixed(6)}</span>
-        </div>
-
-        <div className="flex justify-between items-center">
-          <span className="text-gray-400 text-sm">24h</span>
-          <span className={`font-mono flex items-center gap-1 ${isProfit ? 'text-profit' : 'text-loss'}`}>
-            {isProfit ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-            {Math.abs(change24h).toFixed(2)}%
-          </span>
-        </div>
-
-        <div className="flex justify-between items-center">
-          <span className="text-gray-400 text-sm">MCap</span>
-          <span className="font-mono text-white">
-            ${(marketCap / 1000000).toFixed(2)}M
-          </span>
-        </div>
+      
+      {token.description && (
+        <p className="text-sm text-gray-400 mt-3 line-clamp-2">
+          {token.description}
+        </p>
+      )}
+      
+      <div className="flex justify-between mt-4 text-xs text-gray-500">
+        <span>Vol: ${formatNumber(token.volume_24h || 0)}</span>
+        <span>{token.is_currently_live ? '🟢 Live' : '⚪ Inactive'}</span>
       </div>
-    </motion.div>
+    </Link>
   )
 }

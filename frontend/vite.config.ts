@@ -15,14 +15,32 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    allowedHosts: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/pump': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/tokens': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/wallet': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/trading': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/health': {
+        target: 'http://localhost:8000',
         changeOrigin: true,
       },
     },
-    allowedHosts: [
-      'cf88a249f941.ngrok-free.app', 
-    ],
   },
 })

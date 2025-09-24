@@ -7,6 +7,7 @@ import TokenDetailsPage from './pages/TokenDetailsPage'
 import CreateTokenPage from './pages/CreateTokenPage'
 import TradingPage from './pages/TradingPage'
 import SearchPage from './pages/SearchPage'
+import TestConnection from './pages/TestConnection'
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
         <Layout>
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/test" element={<TestConnection />} />
             <Route path="/token/:mint" element={<TokenDetailsPage />} />
             <Route path="/create" element={<CreateTokenPage />} />
             <Route path="/trade" element={<TradingPage />} />
