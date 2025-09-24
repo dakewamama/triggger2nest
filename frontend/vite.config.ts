@@ -17,30 +17,13 @@ export default defineConfig({
     port: 5173,
     allowedHosts: true,
     proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/pump': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/tokens': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/wallet': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/trading': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/health': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
+      '/health': 'http://localhost:8000',
+      '/api': 'http://localhost:8000',
+      '/pump': 'http://localhost:8000',
+      '/tokens': 'http://localhost:8000',
+      '/wallet': 'http://localhost:8000',
+      '/trading': 'http://localhost:8000',
     },
   },
+  clearScreen: false,
 })

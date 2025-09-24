@@ -1,111 +1,183 @@
 #!/bin/bash
 
-echo "🔄 NETWORK CONFIGURATION FOR FRONTEND"
-echo "======================================"
+echo "🧹 COMPLETE CLEANUP & FIX"
+echo "========================="
 
+# 1. Stop all running processes
+echo "Stopping all processes..."
+lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+lsof -ti:8000 | xargs kill -9 2>/dev/null || true
+lsof -ti:5173 | xargs kill -9 2>/dev/null || true
+
+# 2. Clear backend cache
+echo "Clearing backend cache..."
+rm -rf dist/
+rm -rf node_modules/.cache/
+rm -rf .nest/
+rm -rf tmp/
+
+# 3. Clear frontend cache
+echo "Clearing frontend cache..."
 cd frontend
+rm -rf node_modules/.cache/
+rm -rf .vite/
+rm -rf dist/
+cd ..
 
-# Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-echo -e "${BLUE}Current Configuration:${NC}"
-echo "The frontend is currently configured for: MAINNET-BETA"
+# 4. Find out what port backend ACTUALLY uses
 echo ""
+echo "Checking backend port configuration..."
+BACKEND_PORT=$(grep -oP 'port\s*=\s*\K\d+' src/main.ts 2>/dev/null || echo "3000")
+echo "Backend is configured for port: $BACKEND_PORT"
 
-echo "Choose network:"
-echo "1) Devnet (for testing - free SOL)"
-echo "2) Mainnet-beta (real tokens, real money)"
-echo ""
-read -p "Enter choice (1 or 2): " choice
+# 5. Fix frontend to use the correct port
+echo "Updating frontend to use port $BACKEND_PORT..."
+cat > frontend/src/services/api.ts << EOF
+import axios from 'axios'
 
-case $choice in
-  1)
-    NETWORK="devnet"
-    RPC_URL="https://api.devnet.solana.com"
-    echo -e "${YELLOW}Switching to DEVNET...${NC}"
-    ;;
-  2)
-    NETWORK="mainnet-beta"
-    RPC_URL="https://api.mainnet-beta.solana.com"
-    echo -e "${YELLOW}Switching to MAINNET-BETA...${NC}"
-    ;;
-  *)
-    echo "Invalid choice. Keeping current configuration."
-    exit 1
-    ;;
-esac
+const API_BASE_URL = 'http://localhost:$BACKEND_PORT'
 
-# Update WalletProvider.tsx
-echo "Updating WalletProvider..."
-sed -i "s|https://api.mainnet-beta.solana.com|$RPC_URL|g" src/providers/WalletProvider.tsx
-sed -i "s|'mainnet-beta'|'$NETWORK'|g" src/providers/WalletProvider.tsx
+console.log('🔗 API connecting to:', API_BASE_URL);
 
-# Create/Update .env file
-echo "Creating .env file..."
-cat > .env << EOF
-# Network Configuration
-VITE_SOLANA_NETWORK=$NETWORK
-VITE_SOLANA_RPC_URL=$RPC_URL
+class ApiService {
+  private api = axios.create({
+    baseURL: API_BASE_URL,
+    timeout: 30000,
+  })
 
-# Backend API (your NestJS backend)
-VITE_API_URL=http://localhost:8000
+  constructor() {
+    this.api.interceptors.request.use(
+      (config) => {
+        console.log(\`[API] \${config.method?.toUpperCase()} \${config.baseURL}\${config.url}\`)
+        return config
+      },
+      (error) => Promise.reject(error)
+    )
 
-# Optional: Helius RPC (faster, get free key at helius.dev)
-# VITE_HELIUS_RPC_URL=https://devnet.helius-rpc.com/?api-key=YOUR_KEY
-EOF
+    this.api.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        console.error('API Error:', error.message)
+        if (error.code === 'ERR_NETWORK') {
+          console.error(\`Cannot connect to backend on port $BACKEND_PORT. Is it running?\`)
+        }
+        return Promise.reject(error)
+      }
+    )
+  }
 
-# Update a config file for easy reference
-echo "Creating network config file..."
-cat > src/config/network.ts << 'EOF'
-export const NETWORK = import.meta.env.VITE_SOLANA_NETWORK || 'mainnet-beta'
-export const RPC_URL = import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com'
+  async healthCheck() {
+    try {
+      const { data } = await this.api.get('/health')
+      return data
+    } catch (error) {
+      return { status: 'error', message: 'Backend offline' }
+    }
+  }
 
-export const IS_DEVNET = NETWORK === 'devnet'
-export const IS_MAINNET = NETWORK === 'mainnet-beta'
+  async getTrendingTokens(limit = 50, offset = 0) {
+    try {
+      const { data } = await this.api.get('/tokens/trending', { 
+        params: { limit, offset } 
+      })
+      return data.data || []
+    } catch (error) {
+      return []
+    }
+  }
 
-// Pump.fun works on mainnet only
-export const PUMP_FUN_AVAILABLE = IS_MAINNET
+  async getFeaturedTokens(limit = 20, offset = 0) {
+    try {
+      const { data } = await this.api.get('/tokens/featured', { 
+        params: { limit, offset } 
+      })
+      return data.data || []
+    } catch (error) {
+      return []
+    }
+  }
 
-console.log(`🌐 Connected to: ${NETWORK}`)
-console.log(`📡 RPC URL: ${RPC_URL}`)
+  async getNewTokens(limit = 50, offset = 0) {
+    try {
+      const { data } = await this.api.get('/tokens/new', { 
+        params: { limit, offset } 
+      })
+      return data.data || []
+    } catch (error) {
+      return []
+    }
+  }
 
-if (IS_DEVNET) {
-  console.log('💧 Get free SOL at: https://faucet.solana.com')
-  console.log('⚠️  Note: Pump.fun tokens only work on mainnet!')
+  async getMarketStats() {
+    try {
+      const { data } = await this.api.get('/tokens/stats/market')
+      return data.data
+    } catch (error) {
+      return null
+    }
+  }
+
+  async getLatestTrades(limit = 20) {
+    try {
+      const { data } = await this.api.get('/tokens/trades/latest', {
+        params: { limit }
+      })
+      return data.data || []
+    } catch (error) {
+      return []
+    }
+  }
+
+  // Add other methods as needed...
 }
+
+const apiService = new ApiService()
+export { apiService, apiService as api }
+export default apiService
+EOF
+
+# 6. Update vite config
+cat > frontend/vite.config.ts << EOF
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import path from 'path'
+
+export default defineConfig({
+  plugins: [react()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
+  define: {
+    'process.env': {},
+    global: 'globalThis',
+  },
+  server: {
+    port: 5173,
+    proxy: {
+      '/health': 'http://localhost:$BACKEND_PORT',
+      '/api': 'http://localhost:$BACKEND_PORT',
+      '/pump': 'http://localhost:$BACKEND_PORT',
+      '/tokens': 'http://localhost:$BACKEND_PORT',
+      '/wallet': 'http://localhost:$BACKEND_PORT',
+      '/trading': 'http://localhost:$BACKEND_PORT',
+    },
+  },
+  clearScreen: false,
+})
 EOF
 
 echo ""
-echo -e "${GREEN}✅ Network switched to: $NETWORK${NC}"
+echo "✅ Cache cleared and configuration updated!"
 echo ""
-
-if [ "$NETWORK" == "devnet" ]; then
-  echo -e "${YELLOW}DEVNET Configuration:${NC}"
-  echo "- Network: Devnet (testing network)"
-  echo "- Get free SOL at: https://faucet.solana.com"
-  echo "- RPC: $RPC_URL"
-  echo ""
-  echo -e "${YELLOW}⚠️  IMPORTANT:${NC}"
-  echo "Pump.fun tokens ONLY exist on mainnet!"
-  echo "On devnet you can:"
-  echo "  - Test wallet connections"
-  echo "  - Test transaction signing"
-  echo "  - Create test tokens"
-  echo "But you WON'T see real pump.fun tokens"
-else
-  echo -e "${GREEN}MAINNET Configuration:${NC}"
-  echo "- Network: Mainnet-beta (real network)"
-  echo "- Uses real SOL and real tokens"
-  echo "- Pump.fun tokens will work"
-  echo "- RPC: $RPC_URL"
-  echo ""
-  echo -e "${YELLOW}⚠️  WARNING:${NC}"
-  echo "This uses REAL SOL and REAL MONEY!"
-fi
-
+echo "Now start both servers:"
 echo ""
-echo "Restart your frontend for changes to take effect:"
-echo "  npm run dev"
+echo "Terminal 1 - Backend:"
+echo "  npm run start:dev"
+echo ""
+echo "Terminal 2 - Frontend:"
+echo "  cd frontend && npm run dev"
+echo ""
+echo "Backend will run on: http://localhost:$BACKEND_PORT"
+echo "Frontend will run on: http://localhost:5173"
