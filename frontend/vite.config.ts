@@ -10,12 +10,11 @@ export default defineConfig({
     },
   },
   define: {
-    'process.env': {},
     global: 'globalThis',
+    'process.env': {},
   },
   server: {
     port: 5173,
-    allowedHosts: true,
     proxy: {
       '/health': 'http://localhost:8000',
       '/api': 'http://localhost:8000',
@@ -25,5 +24,8 @@ export default defineConfig({
       '/trading': 'http://localhost:8000',
     },
   },
-  clearScreen: false,
+  optimizeDeps: {
+    exclude: ['@solana/web3.js'],
+    include: ['buffer', 'process'],
+  },
 })

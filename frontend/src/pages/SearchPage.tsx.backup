@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import api from '@/services/api'
+import { api } from '../services/api'
 import TokenCard from '../components/TokenCard'
 import { Search, Filter, X, Sparkles } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { toast } from 'sonner'
-import api from '@/services/api'
+import { api } from '@/services/api'
 import TradingPanel from '@/components/TradingPanel'
 import TokenTrades from '@/components/TokenTrades'
 import { Copy, Twitter, Globe } from 'lucide-react'

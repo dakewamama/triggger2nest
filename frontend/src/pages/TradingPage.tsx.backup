@@ -25,7 +25,7 @@ export default function TradingPage() {
       ])
 
       // Sort for gainers and losers
-      const sorted = [...trending].sort((a, b) => (b.price_change_24h || 0) - (a.price_change_24h || 0))
+      const sorted = [...trending].sort((a, b) => (b.change24h || 0) - (a.change24h || 0))
       setTopGainers(sorted.slice(0, 5))
       setTopLosers(sorted.slice(-5).reverse())
       setActiveTokens(trending.slice(0, 10))
@@ -61,7 +61,7 @@ export default function TradingPage() {
                   <span className="font-mono text-sm">{token.symbol}</span>
                 </div>
                 <span className="text-profit font-mono text-sm">
-                  +{token.price_change_24h?.toFixed(2)}%
+                  +{token.change24h?.toFixed(2)}%
                 </span>
               </div>
             ))}
@@ -81,7 +81,7 @@ export default function TradingPage() {
                   <span className="font-mono text-sm">{token.symbol}</span>
                 </div>
                 <span className="text-loss font-mono text-sm">
-                  {token.price_change_24h?.toFixed(2)}%
+                  {token.change24h?.toFixed(2)}%
                 </span>
               </div>
             ))}

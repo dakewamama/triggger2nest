@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useWallet, useConnection } from '../providers/WalletProvider'
-import api from '@/services/api'
+import { api } from '@/services/api'
 import { toast } from 'sonner'
 import { VersionedTransaction } from '@solana/web3.js'
 

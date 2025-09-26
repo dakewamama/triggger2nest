@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useWallet } from '../providers/WalletProvider'
-import api from '@/services/api'
+import { api } from '@/services/api'
 import { toast } from 'sonner'
 import { Upload } from 'lucide-react'
 
