@@ -7,6 +7,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      buffer: 'buffer',
+      process: 'process/browser',
     },
   },
   define: {
@@ -15,6 +17,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    allowedHosts:true,
     proxy: {
       '/health': 'http://localhost:8000',
       '/api': 'http://localhost:8000',
@@ -25,7 +28,11 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    exclude: ['@solana/web3.js'],
     include: ['buffer', 'process'],
+    esbuildOptions: {
+      define: {
+        global: 'globalThis',
+      },
+    },
   },
 })

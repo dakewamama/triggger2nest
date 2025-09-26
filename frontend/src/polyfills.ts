@@ -1,10 +1,9 @@
-import { Buffer } from 'buffer'
-import process from 'process'
+import { Buffer } from 'buffer';
+import process from 'process';
 
-window.Buffer = window.Buffer || Buffer
-window.process = window.process || process
+// Set up globals
+(window as any).Buffer = Buffer;
+(window as any).process = process;
+(window as any).global = window;
 
-// Fix for EventEmitter3
-if (typeof global === 'undefined') {
-  window.global = window
-}
+console.log('✅ Polyfills loaded');
