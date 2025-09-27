@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import api from '@/services/api'
 import { ArrowUpRight, ArrowDownRight, ExternalLink } from 'lucide-react'
 import { formatAddress } from '../utils/format'
+import { IS_DEVNET } from '@/config/network'
 
 interface TokenTradesProps {
   mint: string
@@ -124,12 +125,13 @@ export default function TokenTrades({ mint, symbol }: TokenTradesProps) {
                     {trade.timestamp ? new Date(trade.timestamp * 1000).toLocaleTimeString() : 'N/A'}
                   </td>
                   <td className="py-2">
-                    
-                      href={`https://solscan.io/tx/${trade.signature}?cluster=devnet`}
+                    <a
+                      href={`https://solscan.io/tx/${trade.signature}?cluster=${IS_DEVNET}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-gray-400 hover:text-neon-cyan"
-                    <a>
+                      className="text-gray-400 hover:text-neon-cyan inline-flex"
+                      title="View on Solscan"
+                    >
                       <ExternalLink size={14} />
                     </a>
                   </td>
