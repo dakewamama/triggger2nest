@@ -1,28 +1,3 @@
-#!/bin/bash
-
-# fix-search.sh - Fix search functionality
-
-echo "🔧 FIXING SEARCH FUNCTIONALITY"
-echo "=============================="
-echo ""
-
-# 1. First, test current search endpoint
-echo "1. Testing current search endpoint..."
-curl -s "http://localhost:8000/tokens/search?query=pump" | jq . | head -20 || echo "Search test failed"
-
-echo ""
-echo "2. Adding dynamic search to TokensService..."
-echo "   Please add the searchTokensDynamic method to src/tokens/tokens.service.ts"
-echo "   (Copy from the artifact above)"
-
-echo ""
-echo "3. Installing lodash for debouncing..."
-cd frontend
-npm install --save lodash @types/lodash
-
-echo ""
-echo "4. Creating test search..."
-cat > src/pages/TestSearch.tsx << 'EOF'
 import React, { useState } from 'react';
 import { tokensService } from '@/services/api';
 
@@ -137,37 +112,3 @@ export default function TestSearch() {
     </div>
   );
 }
-EOF
-
-echo "✅ Created test search page"
-
-echo ""
-echo "5. Adding route for test page..."
-echo "   Add this to your router:"
-echo '   <Route path="/test-search" element={<TestSearch />} />'
-
-echo ""
-echo "6. Restarting backend to apply changes..."
-cd ..
-pkill -f "nest start" || true
-npm run start:dev &
-
-sleep 3
-
-echo ""
-echo "=============================="
-echo "✅ SEARCH FIXES APPLIED!"
-echo "=============================="
-echo ""
-echo "To test the search:"
-echo "1. Go to: http://localhost:5173/test-search"
-echo "2. Try searching for:"
-echo "   - Token symbols: PEPE, DOGE"
-echo "   - Partial names: moon, dog"
-echo "   - Contract addresses (first few chars)"
-echo ""
-echo "The search now:"
-echo "• Works with partial matches ✅"
-echo "• Sorts by trending/market cap ✅"
-echo "• Shows match type and score ✅"
-echo "• Handles typos with fuzzy matching ✅"

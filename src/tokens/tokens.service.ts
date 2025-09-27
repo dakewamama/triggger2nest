@@ -337,7 +337,7 @@ export class TokensService {
   }
 
   /**
-   * Enhanced search with suggestions and related tokens
+   * Enhanced search with suggestions and related tokens - FIXED VERSION
    */
   async searchTokensAdvanced(query: string, limit = 20): Promise<SearchResult> {
     try {
@@ -352,7 +352,8 @@ export class TokensService {
         };
       }
 
-      const searchTerm = query.trim().toLowerCase();
+      const searchTerm = query.trim();
+      const searchTermLower = searchTerm.toLowerCase();
       const results: SearchResult = {
         data: [],
         suggestions: [],
@@ -362,27 +363,25 @@ export class TokensService {
       };
 
       // ========== 1. CHECK IF IT'S A CONTRACT ADDRESS ==========
-      // CA can be full address or partial (first/last 8 chars)
-      const looksLikeCa = /^[a-zA-Z0-9]{32,44}$/.test(searchTerm) || 
-                          (/^[a-zA-Z0-9]{6,}$/.test(searchTerm) && searchTerm.length > 10);
+      // CA can be full address or partial
+      const looksLikeCa = /^[a-zA-Z0-9]{6,}$/.test(searchTerm) && 
+                          !(/^[a-zA-Z]+$/.test(searchTerm)); // Not purely alphabetic
       
       if (looksLikeCa) {
         this.logger.log(`🔑 Detected possible Contract Address: ${searchTerm}`);
         results.searchType = 'ca';
         
-        // Try exact match first
-        if (searchTerm.length >= 32) {
-          try {
-            const tokenResult = await this.getTokenDetails(searchTerm);
-            if (tokenResult.data) {
-              this.logger.log(`✅ Found token by exact CA match`);
-              results.data = [tokenResult.data];
-              results.totalMatches = 1;
-              return results;
-            }
-          } catch (err) {
-            this.logger.debug(`No exact CA match for ${searchTerm}`);
+        // Try exact match first (for any length CA)
+        try {
+          const tokenResult = await this.getTokenDetails(searchTerm);
+          if (tokenResult.data) {
+            this.logger.log(`✅ Found token by exact CA match`);
+            results.data = [tokenResult.data];
+            results.totalMatches = 1;
+            return results;
           }
+        } catch (err) {
+          this.logger.debug(`No exact CA match for ${searchTerm}`);
         }
         
         // For partial CA, we'll search in the fetched tokens below
@@ -405,15 +404,26 @@ export class TokensService {
               q: query,
               query: query,
               search: query,
-              limit,
+              limit: Math.min(limit * 2, 100), // Get more results for better matching
               includeNsfw: false,
             });
             
             if (data && data.length > 0) {
               this.logger.log(`✅ Found ${data.length} tokens via ${endpoint}`);
-              results.data = data.slice(0, limit);
+              
+              // Process and sort the results properly
+              const processedResults = this.rankSearchResults(data, searchTermLower, looksLikeCa);
+              
+              results.data = processedResults.exact.concat(
+                processedResults.high,
+                processedResults.medium,
+                processedResults.low
+              ).slice(0, limit);
+              
               results.totalMatches = data.length;
-              results.searchType = 'exact';
+              results.searchType = processedResults.exact.length > 0 ? 'exact' : 'fuzzy';
+              results.relatedTokens = processedResults.low.slice(0, 5);
+              
               return results;
             }
           } catch (endpointError) {
@@ -424,245 +434,86 @@ export class TokensService {
         this.logger.warn(`Direct API search failed for "${query}":`, apiError.message);
       }
 
-      // ========== 3. FETCH TOKEN DATA FOR LOCAL SEARCH ==========
-      this.logger.log(`📊 Using fetch-and-filter search for: "${query}"`);
+      // ========== 3. FALLBACK: FETCH MORE TOKENS AND SEARCH LOCALLY ==========
+      this.logger.log(`[Method 2] Direct search failed. Fetching tokens for local search...`);
       
-      // Fetch multiple pages to get more tokens
-      const fetchPromises = [];
+      // Fetch a larger pool of tokens for better search coverage
+      const [trending, featured, newTokens] = await Promise.all([
+        this.getTrendingTokens(200, 0).catch(() => ({ data: [] })),
+        this.getFeaturedTokens(50, 0).catch(() => ({ data: [] })),
+        this.getNewTokens(100, 0).catch(() => ({ data: [] })),
+      ]);
       
-      // Fetch by market cap (3 pages)
-      for (let page = 0; page < 3; page++) {
-        fetchPromises.push(
-          this.callFallbackAPI('/coins', { 
-            limit: 200, 
-            offset: page * 200,
-            includeNsfw: false,
-            sort: 'market_cap',
-            order: 'DESC'
-          }).catch(err => {
-            this.logger.debug(`Page ${page} (market_cap) failed: ${err.message}`);
-            return [];
-          })
-        );
-      }
-      
-      // Also fetch newest tokens
-      fetchPromises.push(
-        this.callFallbackAPI('/coins', { 
-          limit: 100, 
-          offset: 0,
-          includeNsfw: false,
-          sort: 'created_timestamp',
-          order: 'DESC'
-        }).catch(err => {
-          this.logger.debug(`New tokens fetch failed: ${err.message}`);
-          return [];
-        })
-      );
-
-      this.logger.log(`Fetching ${fetchPromises.length} pages of tokens...`);
-      const fetchResults = await Promise.allSettled(fetchPromises);
-      
-      let allTokens: PumpFunToken[] = [];
-      
-      // Collect all successful results
-      for (const result of fetchResults) {
-        if (result.status === 'fulfilled' && result.value) {
-          allTokens = allTokens.concat(result.value);
-        }
-      }
-
-      // Deduplicate
+      // Combine and deduplicate
+      const allTokens = [...trending.data, ...featured.data, ...newTokens.data];
       const uniqueTokens = Array.from(
         new Map(allTokens.map(token => [token.mint, token])).values()
       );
       
-      this.logger.log(`✅ Fetched ${uniqueTokens.length} unique tokens from API`);
+      this.logger.log(`📦 Fetched ${uniqueTokens.length} unique tokens for local search`);
 
-      // ========== 4. PERFORM SEARCH ==========
-      const exactMatches: PumpFunToken[] = [];
-      const fuzzyMatches: PumpFunToken[] = [];
-      const partialMatches: PumpFunToken[] = [];
-      const relatedTokens: PumpFunToken[] = [];
-
-      // Track all search scores
-      const tokenScores = new Map<string, { token: PumpFunToken, score: number, matchType: string }>();
-
-      for (const token of uniqueTokens) {
-        let bestScore = 0;
-        let matchType = 'none';
-        
-        // Check CA match (for partial CA searches)
-        if (looksLikeCa) {
-          const mintLower = token.mint.toLowerCase();
-          if (mintLower === searchTerm) {
-            bestScore = 1.2; // Highest priority for exact CA
-            matchType = 'ca_exact';
-          } else if (mintLower.startsWith(searchTerm) || mintLower.endsWith(searchTerm)) {
-            bestScore = 0.95;
-            matchType = 'ca_partial';
-          } else if (mintLower.includes(searchTerm)) {
-            bestScore = 0.9;
-            matchType = 'ca_contains';
-          }
-        }
-        
-        // Name matching
-        const nameLower = token.name?.toLowerCase() || '';
-        const nameScore = this.calculateSimilarity(nameLower, searchTerm);
-        
-        if (nameLower === searchTerm) {
-          bestScore = Math.max(bestScore, 1);
-          matchType = bestScore === 1 ? 'exact_name' : matchType;
-        } else if (nameLower.includes(searchTerm)) {
-          bestScore = Math.max(bestScore, 0.8);
-          matchType = matchType === 'none' ? 'partial_name' : matchType;
-        } else if (nameScore > 0.7) {
-          bestScore = Math.max(bestScore, nameScore * 0.9);
-          matchType = matchType === 'none' ? 'fuzzy_name' : matchType;
-        }
-        
-        // Symbol matching (higher weight for symbol matches)
-        const symbolLower = token.symbol?.toLowerCase() || '';
-        const symbolScore = this.calculateSimilarity(symbolLower, searchTerm);
-        
-        if (symbolLower === searchTerm) {
-          bestScore = Math.max(bestScore, 1.1); // Slightly higher than name match
-          matchType = bestScore === 1.1 ? 'exact_symbol' : matchType;
-        } else if (symbolLower.includes(searchTerm)) {
-          bestScore = Math.max(bestScore, 0.85);
-          matchType = matchType === 'none' ? 'partial_symbol' : matchType;
-        } else if (symbolScore > 0.7) {
-          bestScore = Math.max(bestScore, symbolScore * 0.95);
-          matchType = matchType === 'none' ? 'fuzzy_symbol' : matchType;
-        }
-        
-        // Description matching (lower weight)
-        const descLower = token.description?.toLowerCase() || '';
-        if (descLower.includes(searchTerm)) {
-          bestScore = Math.max(bestScore, 0.6);
-          matchType = matchType === 'none' ? 'description' : matchType;
-        }
-        
-        // Multi-word search
-        const searchWords = searchTerm.split(/\s+/);
-        if (searchWords.length > 1) {
-          const allWordsMatch = searchWords.every(word => 
-            nameLower.includes(word) || symbolLower.includes(word) || descLower.includes(word)
-          );
-          if (allWordsMatch) {
-            bestScore = Math.max(bestScore, 0.75);
-            matchType = matchType === 'none' ? 'multi_word' : matchType;
-          }
-        }
-        
-        // Store token with its score
-        if (bestScore > 0.5) {
-          tokenScores.set(token.mint, { token, score: bestScore, matchType });
-          
-          // Categorize matches
-          if (bestScore >= 1) {
-            exactMatches.push(token);
-          } else if (bestScore >= 0.8) {
-            fuzzyMatches.push(token);
-          } else if (bestScore >= 0.6) {
-            partialMatches.push(token);
-          } else {
-            relatedTokens.push(token);
-          }
-        }
-      }
-
-      // ========== 5. COMPILE RESULTS ==========
-      // Sort each category by market cap
-      const sortByMarketCap = (a: PumpFunToken, b: PumpFunToken) => 
-        (b.usd_market_cap || 0) - (a.usd_market_cap || 0);
+      // ========== 4. PERFORM LOCAL SEARCH WITH PROPER RANKING ==========
+      const rankedResults = this.rankSearchResults(uniqueTokens, searchTermLower, looksLikeCa);
       
-      exactMatches.sort(sortByMarketCap);
-      fuzzyMatches.sort(sortByMarketCap);
-      partialMatches.sort(sortByMarketCap);
-      relatedTokens.sort(sortByMarketCap);
+      // Combine results with proper priority
+      results.data = rankedResults.exact.concat(
+        rankedResults.high,
+        rankedResults.medium,
+        rankedResults.low
+      ).slice(0, limit);
       
-      // Combine results (exact > fuzzy > partial)
-      results.data = [
-        ...exactMatches.slice(0, Math.min(10, limit)),
-        ...fuzzyMatches.slice(0, Math.min(5, limit - exactMatches.length)),
-        ...partialMatches.slice(0, Math.max(0, limit - exactMatches.length - fuzzyMatches.length))
-      ];
+      results.totalMatches = rankedResults.exact.length + 
+                            rankedResults.high.length + 
+                            rankedResults.medium.length;
       
-      results.totalMatches = exactMatches.length + fuzzyMatches.length + partialMatches.length;
-      results.relatedTokens = relatedTokens.slice(0, 5);
+      results.relatedTokens = rankedResults.low.slice(0, 5);
       
       // Determine search type
-      if (exactMatches.length > 0) {
+      if (rankedResults.exact.length > 0) {
         results.searchType = 'exact';
-      } else if (fuzzyMatches.length > 0) {
+      } else if (rankedResults.high.length > 0) {
         results.searchType = 'fuzzy';
-      } else if (partialMatches.length > 0) {
+      } else if (rankedResults.medium.length > 0) {
         results.searchType = 'partial';
       }
 
-      // ========== 6. GENERATE SUGGESTIONS ==========
+      // ========== 5. GENERATE SUGGESTIONS ==========
       if (results.data.length === 0) {
-        // No matches found - generate suggestions
+        // No matches found - generate suggestions from available tokens
         const suggestions = new Set<string>();
         
-        // Find tokens with similar starting letters
-        const firstChar = searchTerm.charAt(0);
-        const similarTokens = uniqueTokens.filter(token => 
-          token.name?.toLowerCase().startsWith(firstChar) ||
-          token.symbol?.toLowerCase().startsWith(firstChar)
-        ).slice(0, 20);
-        
-        similarTokens.forEach(token => {
-          if (token.name && suggestions.size < 10) {
-            suggestions.add(token.name);
-          }
+        uniqueTokens.slice(0, 50).forEach(token => {
           if (token.symbol && suggestions.size < 10) {
             suggestions.add(token.symbol);
           }
         });
         
         results.suggestions = Array.from(suggestions);
-        
-        this.logger.log(`💡 No exact matches. Generated ${results.suggestions.length} suggestions`);
+        this.logger.log(`💡 No matches. Generated ${results.suggestions.length} suggestions`);
       } else {
-        // Found matches - suggest related searches
+        // Found matches - suggest related tokens
         const suggestions = new Set<string>();
         
-        // Add symbols of top matches as suggestions
         results.data.slice(0, 5).forEach(token => {
-          if (token.symbol && token.symbol.toLowerCase() !== searchTerm) {
+          if (token.symbol && token.symbol.toLowerCase() !== searchTermLower) {
             suggestions.add(token.symbol);
-          }
-        });
-        
-        // Add related token names
-        relatedTokens.slice(0, 5).forEach(token => {
-          if (token.name && suggestions.size < 8) {
-            suggestions.add(token.name);
           }
         });
         
         results.suggestions = Array.from(suggestions);
       }
 
-      // ========== 7. LOG RESULTS ==========
+      // ========== 6. LOG RESULTS ==========
       this.logger.log(`📊 Search Results Summary:`);
       this.logger.log(`  Query: "${query}"`);
       this.logger.log(`  Search Type: ${results.searchType}`);
-      this.logger.log(`  Exact Matches: ${exactMatches.length}`);
-      this.logger.log(`  Fuzzy Matches: ${fuzzyMatches.length}`);
-      this.logger.log(`  Partial Matches: ${partialMatches.length}`);
-      this.logger.log(`  Related Tokens: ${relatedTokens.length}`);
       this.logger.log(`  Total Results: ${results.data.length}`);
+      this.logger.log(`  Total Matches: ${results.totalMatches}`);
       
       if (results.data.length > 0) {
         this.logger.log(`  Top Results:`);
         results.data.slice(0, 3).forEach((token, i) => {
-          const scoreInfo = tokenScores.get(token.mint);
           this.logger.log(`    ${i + 1}. ${token.name} (${token.symbol})`);
-          this.logger.log(`       Match: ${scoreInfo?.matchType} | Score: ${scoreInfo?.score?.toFixed(2)}`);
         });
       }
       
@@ -683,6 +534,151 @@ export class TokensService {
         suggestions: []
       };
     }
+  }
+
+  /**
+   * Rank search results by relevance - NEW METHOD
+   */
+  private rankSearchResults(
+    tokens: PumpFunToken[], 
+    searchTerm: string, 
+    isContractAddress: boolean
+  ): {
+    exact: PumpFunToken[];
+    high: PumpFunToken[];
+    medium: PumpFunToken[];
+    low: PumpFunToken[];
+  } {
+    const exact: PumpFunToken[] = [];
+    const high: PumpFunToken[] = [];
+    const medium: PumpFunToken[] = [];
+    const low: PumpFunToken[] = [];
+    
+    for (const token of tokens) {
+      let score = 0;
+      let category: 'exact' | 'high' | 'medium' | 'low' | 'none' = 'none';
+      
+      // Contract Address matching (highest priority)
+      if (isContractAddress) {
+        const mintLower = token.mint.toLowerCase();
+        const searchLower = searchTerm.toLowerCase();
+        
+        if (mintLower === searchLower) {
+          // Exact CA match - absolute highest priority
+          score = 10;
+          category = 'exact';
+        } else if (mintLower.startsWith(searchLower) || mintLower.endsWith(searchLower)) {
+          // Partial CA match at start or end
+          score = 8;
+          category = 'high';
+        } else if (mintLower.includes(searchLower)) {
+          // CA contains search term
+          score = 6;
+          category = 'medium';
+        }
+      }
+      
+      // Skip other checks if we have a high CA match
+      if (score < 8) {
+        const nameLower = token.name?.toLowerCase() || '';
+        const symbolLower = token.symbol?.toLowerCase() || '';
+        const descLower = token.description?.toLowerCase() || '';
+        
+        // Exact Symbol match (very high priority)
+        if (symbolLower === searchTerm) {
+          score = Math.max(score, 9);
+          category = 'exact';
+        }
+        // Exact Name match
+        else if (nameLower === searchTerm) {
+          score = Math.max(score, 8.5);
+          category = 'exact';
+        }
+        // Symbol starts with search term
+        else if (symbolLower.startsWith(searchTerm)) {
+          score = Math.max(score, 7);
+          category = 'high';
+        }
+        // Name starts with search term
+        else if (nameLower.startsWith(searchTerm)) {
+          score = Math.max(score, 6.5);
+          category = 'high';
+        }
+        // Symbol contains search term
+        else if (symbolLower.includes(searchTerm)) {
+          score = Math.max(score, 5);
+          category = 'medium';
+        }
+        // Name contains search term
+        else if (nameLower.includes(searchTerm)) {
+          score = Math.max(score, 4);
+          category = 'medium';
+        }
+        // Description contains search term
+        else if (descLower.includes(searchTerm)) {
+          score = Math.max(score, 2);
+          category = 'low';
+        }
+        
+        // Multi-word search
+        const searchWords = searchTerm.split(/\s+/);
+        if (searchWords.length > 1) {
+          const allWordsMatch = searchWords.every(word => 
+            nameLower.includes(word) || 
+            symbolLower.includes(word) || 
+            descLower.includes(word)
+          );
+          if (allWordsMatch && score < 3) {
+            score = 3;
+            category = 'medium';
+          }
+        }
+        
+        // Fuzzy matching for typos (only if no better match)
+        if (score < 2) {
+          const nameScore = this.calculateSimilarity(nameLower, searchTerm);
+          const symbolScore = this.calculateSimilarity(symbolLower, searchTerm);
+          
+          if (symbolScore > 0.8) {
+            score = 3.5;
+            category = 'medium';
+          } else if (nameScore > 0.8) {
+            score = 3;
+            category = 'medium';
+          } else if (symbolScore > 0.6 || nameScore > 0.6) {
+            score = 1;
+            category = 'low';
+          }
+        }
+      }
+      
+      // Categorize token based on score
+      switch (category) {
+        case 'exact':
+          exact.push(token);
+          break;
+        case 'high':
+          high.push(token);
+          break;
+        case 'medium':
+          medium.push(token);
+          break;
+        case 'low':
+          low.push(token);
+          break;
+      }
+    }
+    
+    // Sort each category by market cap (highest first)
+    const sortByMarketCap = (a: PumpFunToken, b: PumpFunToken) => 
+      (b.usd_market_cap || 0) - (a.usd_market_cap || 0);
+    
+    exact.sort(sortByMarketCap);
+    high.sort(sortByMarketCap);
+    medium.sort(sortByMarketCap);
+    low.sort(sortByMarketCap);
+    
+    return { exact, high, medium, low };
   }
 
   /**
@@ -721,117 +717,101 @@ export class TokensService {
         limit,
       });
       
-      this.logger.log(`Fetched ${data.length} trades for token: ${mint}`);
+      this.logger.log(`Fetched ${data.length} trades`);
       return { data };
     } catch (error) {
-      this.logger.warn(`No trades found for token ${mint}`);
+      this.logger.error(`Failed to fetch trades for ${mint}:`, error.message);
       return { data: [] };
-    }
-  }
-
-  /**
-   * Get latest trades across all tokens
-   */
-  async getLatestTrades(limit = 100): Promise<{ data: TokenTrade[] }> {
-    try {
-      this.logger.log(`Fetching latest trades - limit: ${limit}`);
-      
-      const data = await this.callFallbackAPI('/trades/latest', { limit });
-      this.logger.log(`Fetched ${data.length} latest trades`);
-      return { data };
-    } catch (error) {
-      this.logger.warn('No latest trades available');
-      return { data: [] };
-    }
-  }
-
-  /**
-   * Get SOL price from CoinGecko
-   */
-  async getSolPrice(): Promise<{ data: { price: number } }> {
-    try {
-      this.logger.log('Fetching SOL price');
-      
-      // Try CoinGecko directly (most reliable)
-      try {
-        const response = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd', {
-          timeout: 5000,
-        });
-        
-        const price = response.data?.solana?.usd || 0;
-        this.logger.log(`SOL price from CoinGecko: $${price}`);
-        return { data: { price } };
-      } catch (coinGeckoError) {
-        this.logger.warn('CoinGecko failed, using fallback price');
-        return { data: { price: 100 } }; // Fallback price
-      }
-    } catch (error) {
-      this.logger.error('Failed to fetch SOL price:', error.message);
-      return { data: { price: 100 } };
     }
   }
 
   /**
    * Get market statistics
    */
-  async getMarketStats(): Promise<{ data: MarketStats }> {
+  async getMarketStats(): Promise<{ data: MarketStats | null }> {
     try {
-      this.logger.log('Calculating market stats from real token data');
+      this.logger.log('Fetching market statistics');
       
-      // Get trending tokens to calculate stats
-      const trendingResult = await this.getTrendingTokens(100);
-      const tokens = trendingResult.data;
+      // Fetch data from multiple endpoints concurrently
+      const [trending, newTokens] = await Promise.all([
+        this.getTrendingTokens(100, 0).catch(() => ({ data: [] })),
+        this.getNewTokens(50, 0).catch(() => ({ data: [] })),
+      ]);
       
-      if (tokens.length === 0) {
-        this.logger.warn('No tokens available for stats calculation');
-        return {
-          data: {
-            totalMarketCap: 0,
-            totalVolume24h: 0,
-            activeTokens: 0,
-            successfulGraduations: 0,
-            totalTokens: 0,
-          }
-        };
-      }
+      const allTokens = [...trending.data, ...newTokens.data];
+      const uniqueTokens = Array.from(
+        new Map(allTokens.map(token => [token.mint, token])).values()
+      );
       
-      const totalMarketCap = tokens.reduce((sum, token) => sum + (token.usd_market_cap || 0), 0);
-      const activeTokens = tokens.filter(token => token.is_currently_live).length;
-      const successfulGraduations = tokens.filter(token => token.complete).length;
-      const totalVolume24h = tokens.reduce((sum, token) => sum + (token.volume_24h || 0), 0);
-      
-      // Count new tokens in last 24 hours
-      const oneDayAgo = Date.now() / 1000 - 86400;
-      const newTokensLast24h = tokens.filter(token => 
-        token.created_timestamp > oneDayAgo
-      ).length;
-      
+      // Calculate statistics
       const stats: MarketStats = {
-        totalMarketCap,
-        totalVolume24h,
-        activeTokens,
-        successfulGraduations,
-        totalTokens: tokens.length,
+        totalMarketCap: uniqueTokens.reduce((acc, token) => acc + (token.usd_market_cap || 0), 0),
+        totalVolume24h: uniqueTokens.reduce((acc, token) => acc + (token.volume_24h || 0), 0),
+        activeTokens: uniqueTokens.filter(token => token.is_currently_live).length,
+        successfulGraduations: uniqueTokens.filter(token => token.complete).length,
+        totalTokens: uniqueTokens.length,
         last24Hours: {
-          newTokens: newTokensLast24h,
-          volume: totalVolume24h,
-          trades: 0 // Would need trades endpoint to calculate
+          newTokens: newTokens.data.length,
+          volume: uniqueTokens.reduce((acc, token) => acc + (token.volume_24h || 0), 0),
+          trades: 0, // Would need trades endpoint
         }
       };
       
-      this.logger.log(`Market stats calculated: ${JSON.stringify(stats)}`);
+      this.logger.log('Market stats calculated');
       return { data: stats };
     } catch (error) {
-      this.logger.error('Failed to calculate market stats:', error.message);
-      return {
-        data: {
-          totalMarketCap: 0,
-          totalVolume24h: 0,
-          activeTokens: 0,
-          successfulGraduations: 0,
-          totalTokens: 0,
-        }
-      };
+      this.logger.error('Failed to fetch market stats:', error.message);
+      return { data: null };
+    }
+  }
+
+  /**
+   * Get SOL price
+   */
+  async getSolPrice(): Promise<{ data: { price: number } }> {
+    try {
+      this.logger.log('Fetching SOL price');
+      
+      // Try to get from PumpPortal first
+      try {
+        const response = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
+          params: {
+            ids: 'solana',
+            vs_currencies: 'usd'
+          },
+          timeout: 5000,
+        });
+        
+        const price = response.data?.solana?.usd || 0;
+        this.logger.log(`SOL price: $${price}`);
+        return { data: { price } };
+      } catch (error) {
+        // Fallback to a default price
+        this.logger.warn('Failed to fetch SOL price, using default');
+        return { data: { price: 200 } };
+      }
+    } catch (error) {
+      this.logger.error('Failed to fetch SOL price:', error.message);
+      return { data: { price: 200 } };
+    }
+  }
+
+  /**
+   * Get latest trades across all tokens
+   */
+  async getLatestTrades(limit = 20): Promise<{ data: TokenTrade[] }> {
+    try {
+      this.logger.log(`Fetching latest ${limit} trades`);
+      
+      const data = await this.callFallbackAPI('/trades/latest', {
+        limit,
+      });
+      
+      this.logger.log(`Fetched ${data.length} latest trades`);
+      return { data };
+    } catch (error) {
+      this.logger.error('Failed to fetch latest trades:', error.message);
+      return { data: [] };
     }
   }
 }

@@ -70,6 +70,8 @@ export interface SearchResult {
   relatedTokens?: PumpToken[];
   searchType?: string;
   totalMatches?: number;
+  query?: string;
+  error?: string;
 }
 
 export interface DashboardData {
@@ -86,11 +88,8 @@ export interface DashboardData {
 }
 
 class TokensService {
-  private readonly baseUrl = '/tokens';
-  
-  /**
-   * Get featured tokens
-   */
+  private readonly baseUrl = '/tokens'; // IMPORTANT: This must be /tokens
+
   async getFeaturedTokens(limit = 20, offset = 0): Promise<PumpToken[]> {
     try {
       console.log(`[TokensService] Fetching featured tokens - limit: ${limit}, offset: ${offset}`);
@@ -109,9 +108,6 @@ class TokensService {
     }
   }
 
-  /**
-   * Get trending tokens
-   */
   async getTrendingTokens(limit = 50, offset = 0): Promise<PumpToken[]> {
     try {
       console.log(`[TokensService] Fetching trending tokens - limit: ${limit}, offset: ${offset}`);
@@ -130,9 +126,6 @@ class TokensService {
     }
   }
 
-  /**
-   * Get new tokens
-   */
   async getNewTokens(limit = 50, offset = 0): Promise<PumpToken[]> {
     try {
       console.log(`[TokensService] Fetching new tokens - limit: ${limit}, offset: ${offset}`);
@@ -151,31 +144,53 @@ class TokensService {
     }
   }
 
-  /**
-   * Search tokens
-   */
+  // FIXED SEARCH METHOD - This is the main fix
   async searchTokens(query: string, filters?: any): Promise<SearchResult> {
     try {
-      console.log(`[TokensService] Searching tokens with query: ${query}`);
+      console.log(`[TokensService] Searching tokens with query: "${query}"`);
       
-      const { data } = await apiClient.api.get(`${this.baseUrl}/search`, {
-        params: { query, ...filters }
-      });
-
-      if (data?.success) {
-        return data.data || { data: [] };
+      // Build the correct URL - MUST be /tokens/search
+      const url = `${this.baseUrl}/search`;
+      
+      // IMPORTANT: Send query as a parameter
+      const params = {
+        q: query,  // THIS IS CRITICAL - Must send query parameter
+        limit: filters?.limit || 50,
+        sortBy: filters?.sortBy || 'trending'
+      };
+      
+      console.log('[TokensService] Request URL:', url);
+      console.log('[TokensService] Request params:', params);
+      
+      const { data } = await apiClient.api.get(url, { params });
+      
+      console.log('[TokensService] Search response:', data);
+      
+      // Handle error response
+      if (data?.success === false) {
+        console.error('[TokensService] Search failed:', data.error);
+        return { 
+          data: [],
+          error: data.error
+        };
       }
       
-      return { data: [] };
+      // Return search results
+      return {
+        data: data?.data || [],
+        totalMatches: data?.count || 0,
+        query: query,
+        suggestions: data?.suggestions || []
+      };
     } catch (error: any) {
       console.error('[TokensService] Failed to search tokens:', error);
-      return { data: [] };
+      return { 
+        data: [],
+        error: error.message || 'Search failed'
+      };
     }
   }
 
-  /**
-   * Get token details
-   */
   async getTokenDetails(mintAddress: string): Promise<PumpToken | null> {
     try {
       console.log(`[TokensService] Fetching token details for: ${mintAddress}`);
@@ -193,9 +208,6 @@ class TokensService {
     }
   }
 
-  /**
-   * Get token trades
-   */
   async getTokenTrades(mintAddress: string, limit = 50): Promise<TokenTrade[]> {
     try {
       console.log(`[TokensService] Fetching trades for token: ${mintAddress}`);
@@ -215,9 +227,6 @@ class TokensService {
     }
   }
 
-  /**
-   * Get market stats
-   */
   async getMarketStats(): Promise<MarketStats | null> {
     try {
       console.log('[TokensService] Fetching market stats');
@@ -235,9 +244,6 @@ class TokensService {
     }
   }
 
-  /**
-   * Get latest trades across all tokens
-   */
   async getLatestTrades(limit = 20): Promise<TokenTrade[]> {
     try {
       console.log('[TokensService] Fetching latest trades');
@@ -257,9 +263,6 @@ class TokensService {
     }
   }
 
-  /**
-   * Get dashboard data (featured, trending, new tokens and stats)
-   */
   async getDashboardData(): Promise<DashboardData> {
     try {
       console.log('[TokensService] Fetching dashboard data');
@@ -308,9 +311,6 @@ class TokensService {
     }
   }
 
-  /**
-   * Process and validate tokens
-   */
   private processTokens(tokens: any[]): PumpToken[] {
     return tokens.filter(token => token && token.mint).map(token => ({
       ...token,

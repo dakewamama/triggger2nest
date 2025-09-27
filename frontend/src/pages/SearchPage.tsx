@@ -1,189 +1,246 @@
-import { useState, useEffect, useCallback } from 'react'
-import api from '@/services/api'
-import TokenCard from '../components/TokenCard'
-import { Search, Filter, X, Sparkles } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
-import debounce from 'lodash.debounce'
+import React, { useState, useCallback, useEffect } from 'react';
+import { Search, X, TrendingUp, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { tokensService } from '@/services/api/tokensService';
+import debounce from 'lodash/debounce';
 
-export default function SearchPage() {
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState<any>([])
-  const [suggestions, setSuggestions] = useState<string[]>([])
-  const [relatedTokens, setRelatedTokens] = useState<any>([])
-  const [searchType, setSearchType] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [showFilters, setShowFilters] = useState(false)
+interface SearchResult {
+  mint: string;
+  name: string;
+  symbol: string;
+  image_uri?: string;
+  market_cap?: number;
+  usd_market_cap?: number;
+  price_change_24h?: number;
+  _searchScore?: number;
+  _matchType?: string;
+  _matchField?: string;
+}
 
+export default function SearchBar() {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
+
+  // Debounced search function
   const performSearch = useCallback(
     debounce(async (searchQuery: string) => {
-      if (!searchQuery.trim()) {
-        setResults([])
-        return
+      if (!searchQuery || searchQuery.trim().length < 1) {
+        setResults([]);
+        setError('');
+        return;
       }
 
-      setLoading(true)
+      setIsSearching(true);
+      setError('');
+
       try {
-        const response = await api.searchTokens(searchQuery)
-        setResults(response.data || [])
-        setSuggestions(response.suggestions || [])
-        setRelatedTokens(response.relatedTokens || [])
-        setSearchType(response.searchType || '')
-      } catch (error) {
-        console.error('Search failed:', error)
+        console.log(`Searching for: ${searchQuery}`);
+        
+        // Make sure we're sending the query parameter correctly
+        const response = await tokensService.searchTokens(searchQuery.trim(), {
+          limit: 20,
+          sortBy: 'trending'
+        });
+        
+        if (response.data && Array.isArray(response.data)) {
+          setResults(response.data);
+          setIsOpen(true);
+          
+          if (response.data.length === 0) {
+            setError('No tokens found. Try a different search.');
+          }
+        } else {
+          setResults([]);
+          setError('No results found');
+        }
+      } catch (err: any) {
+        console.error('Search error:', err);
+        setError('Search failed. Please try again.');
+        setResults([]);
       } finally {
-        setLoading(false)
+        setIsSearching(false);
       }
-    }, 500),
+    }, 300),
     []
-  )
+  );
 
+  // Handle input change
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setQuery(value);
+    
+    if (value.trim()) {
+      performSearch(value);
+    } else {
+      setResults([]);
+      setIsOpen(false);
+      setError('');
+    }
+  };
+
+  // Handle result click
+  const handleResultClick = (token: SearchResult) => {
+    setQuery('');
+    setResults([]);
+    setIsOpen(false);
+    navigate(`/token/${token.mint}`);
+  };
+
+  // Clear search
+  const handleClear = () => {
+    setQuery('');
+    setResults([]);
+    setIsOpen(false);
+    setError('');
+  };
+
+  // Close on escape key
   useEffect(() => {
-    performSearch(query)
-  }, [query])
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, []);
+
+  // Format market cap
+  const formatMarketCap = (marketCap?: number) => {
+    if (!marketCap) return 'N/A';
+    if (marketCap >= 1000000) return `$${(marketCap / 1000000).toFixed(2)}M`;
+    if (marketCap >= 1000) return `$${(marketCap / 1000).toFixed(2)}K`;
+    return `$${marketCap.toFixed(2)}`;
+  };
+
+  // Get match type badge
+  const getMatchBadge = (matchType?: string, matchField?: string) => {
+    if (!matchType || !matchField) return null;
+    
+    const badges: Record<string, { text: string; color: string }> = {
+      'contract_address': { text: 'Contract', color: 'bg-purple-500' },
+      'symbol': { text: 'Symbol', color: 'bg-blue-500' },
+      'name': { text: 'Name', color: 'bg-green-500' },
+      'description': { text: 'Description', color: 'bg-gray-500' },
+    };
+    
+    const badge = badges[matchField] || { text: matchType, color: 'bg-gray-400' };
+    
+    return (
+      <span className={`px-2 py-0.5 text-xs text-white rounded ${badge.color}`}>
+        {badge.text}
+      </span>
+    );
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Search Header */}
-      <div className="terminal-card">
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by name, symbol, or contract address..."
-              className="w-full bg-terminal-bg border border-terminal-border rounded-lg pl-10 pr-4 py-3 focus:border-neon-lime outline-none"
-            />
-            {query && (
-              <button
-                onClick={() => setQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-              >
-                <X size={20} />
-              </button>
-            )}
-          </div>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`px-4 py-3 rounded-lg border transition-all ${
-              showFilters ? 'bg-neon-lime text-black border-neon-lime' : 'border-terminal-border'
-            }`}
-          >
-            <Filter size={20} />
-          </button>
-        </div>
-
-        {/* Search Type Indicator */}
-        {searchType && (
-          <div className="mt-3 flex items-center gap-2">
-            <span className="text-gray-400 text-sm">Search type:</span>
-            <span className="px-2 py-1 bg-neon-lime/20 text-neon-lime rounded text-sm font-mono">
-              {searchType}
-            </span>
-          </div>
+    <div className="relative w-full max-w-md">
+      {/* Search Input */}
+      <div className="relative">
+        <input
+          type="text"
+          value={query}
+          onChange={handleInputChange}
+          placeholder="Search by token name, symbol, or contract address..."
+          className="w-full px-10 py-2 bg-gray-800 text-white rounded-lg border border-gray-700 focus:border-green-400 focus:outline-none"
+        />
+        
+        <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+        
+        {isSearching && (
+          <Loader2 className="absolute right-10 top-2.5 w-5 h-5 text-green-400 animate-spin" />
         )}
-
-        {/* Suggestions */}
-        {suggestions.length > 0 && (
-          <div className="mt-4">
-            <p className="text-gray-400 text-sm mb-2">Did you mean:</p>
-            <div className="flex flex-wrap gap-2">
-              {suggestions.map((suggestion, i) => (
-                <button
-                  key={i}
-                  onClick={() => setQuery(suggestion)}
-                  className="px-3 py-1 bg-terminal-border rounded hover:bg-neon-lime hover:text-black transition-all"
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
-          </div>
+        
+        {query && (
+          <button
+            onClick={handleClear}
+            className="absolute right-3 top-2.5 text-gray-400 hover:text-white"
+          >
+            <X className="w-5 h-5" />
+          </button>
         )}
       </div>
 
-      {/* Filters Panel */}
-      <AnimatePresence>
-        {showFilters && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="terminal-card overflow-hidden"
-          >
-            <h3 className="font-display font-bold mb-4">Filters</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="text-sm text-gray-400">Min Market Cap</label>
-                <input
-                  type="number"
-                  placeholder="0"
-                  className="w-full mt-1 bg-terminal-bg border border-terminal-border rounded px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="text-sm text-gray-400">Max Market Cap</label>
-                <input
-                  type="number"
-                  placeholder="1000000"
-                  className="w-full mt-1 bg-terminal-bg border border-terminal-border rounded px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="text-sm text-gray-400">Min Volume 24h</label>
-                <input
-                  type="number"
-                  placeholder="0"
-                  className="w-full mt-1 bg-terminal-bg border border-terminal-border rounded px-3 py-2"
-                />
-              </div>
+      {/* Search Results Dropdown */}
+      {isOpen && (query || results.length > 0) && (
+        <div className="absolute z-50 w-full mt-2 bg-gray-900 border border-gray-700 rounded-lg shadow-xl max-h-96 overflow-y-auto">
+          {error && (
+            <div className="p-4 text-center text-gray-400">
+              {error}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Results */}
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {[...Array(8)].map((_, i) => (
-            <div key={i} className="terminal-card animate-pulse">
-              <div className="h-40 bg-terminal-border rounded" />
+          )}
+          
+          {!error && results.length > 0 && (
+            <div className="py-2">
+              {results.map((token) => (
+                <button
+                  key={token.mint}
+                  onClick={() => handleResultClick(token)}
+                  className="w-full px-4 py-3 hover:bg-gray-800 transition-colors text-left"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3 flex-1">
+                      {/* Token Image */}
+                      {token.image_uri ? (
+                        <img 
+                          src={token.image_uri} 
+                          alt={token.symbol}
+                          className="w-10 h-10 rounded-full"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
+                          <span className="text-xs font-bold">
+                            {token.symbol?.slice(0, 2).toUpperCase()}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* Token Info */}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-white">
+                            {token.name || 'Unknown'}
+                          </span>
+                          <span className="text-gray-400 text-sm">
+                            ${token.symbol || 'N/A'}
+                          </span>
+                          {getMatchBadge(token._matchType, token._matchField)}
+                        </div>
+                        <div className="text-xs text-gray-500 truncate">
+                          {token.mint}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Market Cap & Price Change */}
+                    <div className="text-right">
+                      <div className="text-sm text-gray-300">
+                        {formatMarketCap(token.usd_market_cap || token.market_cap)}
+                      </div>
+                      {token.price_change_24h !== undefined && (
+                        <div className={`text-xs flex items-center gap-1 ${
+                          token.price_change_24h >= 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          <TrendingUp className="w-3 h-3" />
+                          {token.price_change_24h >= 0 ? '+' : ''}
+                          {token.price_change_24h.toFixed(2)}%
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))}
             </div>
-          ))}
-        </div>
-      ) : results.length > 0 ? (
-        <>
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-display font-bold">
-              {results.length} Results
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {results.map((token: any) => (
-              <TokenCard key={token.mint} {...token} />
-            ))}
-          </div>
-        </>
-      ) : query && !loading ? (
-        <div className="text-center py-12">
-          <Sparkles className="mx-auto text-gray-600 mb-4" size={48} />
-          <h3 className="text-xl font-display mb-2">No tokens found</h3>
-          <p className="text-gray-400">Try a different search term</p>
-        </div>
-      ) : null}
-
-      {/* Related Tokens */}
-      {relatedTokens.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-xl font-display font-bold">Related Tokens</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {relatedTokens.map((token: any) => (
-              <TokenCard key={token.mint} {...token} />
-            ))}
-          </div>
+          )}
         </div>
       )}
     </div>
-  )
+  );
 }
