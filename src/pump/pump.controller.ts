@@ -24,13 +24,18 @@ export class PumpController {
   }
 
   @Post('buy-token')
-  async buyToken(@Body() buyTokenDto: BuyTokenDto) {
+  async buyToken(@Body() buyTokenDto: BuyTokenDto & { simulate?: boolean }) {
     return this.pumpService.buyToken(buyTokenDto);
   }
 
   @Post('sell-token')
-  async sellToken(@Body() sellTokenDto: SellTokenDto) {
+  async sellToken(@Body() sellTokenDto: SellTokenDto & { simulate?: boolean }) {
     return this.pumpService.sellToken(sellTokenDto);
+  }
+
+  @Post('simulate')
+  async simulateTransaction(@Body() body: { transaction: string }) {
+    return this.pumpService.simulateTransaction(body.transaction);
   }
 
   @Get('token-info/:mintAddress')
@@ -45,6 +50,11 @@ export class PumpController {
     @Query('action') action: 'buy' | 'sell',
   ) {
     return this.pumpService.getQuote(mint, Number(amount), action);
+  }
+
+  @Get('token-status/:mint')
+  async checkTokenStatus(@Param('mint') mint: string) {
+    return this.pumpService.checkTokenStatus(mint);
   }
 
   @Get('wallet/:address/balances')

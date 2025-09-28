@@ -1,4 +1,4 @@
-// frontend/src/components/TokenTrades.tsx
+// frontend/src/components/TokenTrades.tsx - FIXED VERSION
 import { useEffect, useState } from 'react'
 import api from '@/services/api'
 import { ArrowUpRight, ArrowDownRight, ExternalLink } from 'lucide-react'
@@ -85,71 +85,67 @@ export default function TokenTrades({ mint, symbol }: TokenTradesProps) {
               </tr>
             </thead>
             <tbody>
-              {trades.map((trade) => (
+              {trades.map((trade, index) => (
                 <tr 
-                  key={trade.signature}
+                  // FIX: Use index as fallback when signature is duplicate
+                  key={trade.signature ? `${trade.signature}-${index}` : index}
                   className="border-b border-terminal-border/50 hover:bg-terminal-border/20"
                 >
                   <td className="py-2">
                     <span className={`flex items-center gap-1 ${
-                      trade.is_buy ? 'text-profit' : 'text-loss'
+                      trade.is_buy ? 'text-neon-lime' : 'text-neon-magenta'
                     }`}>
                       {trade.is_buy ? (
-                        <ArrowUpRight size={14} />
+                        <ArrowUpRight className="w-4 h-4" />
                       ) : (
-                        <ArrowDownRight size={14} />
+                        <ArrowDownRight className="w-4 h-4" />
                       )}
                       {trade.is_buy ? 'Buy' : 'Sell'}
                     </span>
                   </td>
                   <td className="py-2 font-mono">
-                    {trade.token_amount?.toLocaleString() || '0'}
+                    {trade.token_amount ? trade.token_amount.toLocaleString() : '0'}
                   </td>
                   <td className="py-2 font-mono">
-                    ${trade.token_amount ? (trade.sol_amount / trade.token_amount).toFixed(8) : '0'}
+                    ${trade.price ? trade.price.toFixed(6) : '0'}
                   </td>
                   <td className="py-2 font-mono">
-                    {trade.sol_amount?.toFixed(4) || '0'} SOL
+                    ${trade.sol_amount ? (trade.sol_amount * 150).toFixed(2) : '0'}
                   </td>
                   <td className="py-2">
-                    <a 
-                      href={`https://solscan.io/account/${trade.user}?cluster=devnet`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-neon-cyan hover:text-neon-lime transition-colors"
-                    >
-                      {trade.user ? formatAddress(trade.user) : 'Unknown'}
-                    </a>
+                    <span className="font-mono text-xs">
+                      {formatAddress(trade.user || '')}
+                    </span>
                   </td>
                   <td className="py-2 text-gray-400">
-                    {trade.timestamp ? new Date(trade.timestamp * 1000).toLocaleTimeString() : 'N/A'}
+                    {trade.timestamp ? new Date(trade.timestamp * 1000).toLocaleTimeString() : '-'}
                   </td>
                   <td className="py-2">
                     <a
-                      href={`https://solscan.io/tx/${trade.signature}?cluster=${IS_DEVNET}`}
+                      href={`https://${IS_DEVNET ? 'solscan.io' : 'solscan.io'}/tx/${trade.signature}${IS_DEVNET ? '?cluster=devnet' : ''}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-gray-400 hover:text-neon-cyan inline-flex"
-                      title="View on Solscan"
+                      className="text-gray-400 hover:text-white"
                     >
-                      <ExternalLink size={14} />
+                      <ExternalLink className="w-4 h-4" />
                     </a>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      )}
 
-      {hasMore && !loading && trades.length > 0 && (
-        <div className="text-center mt-4">
-          <button
-            onClick={loadMore}
-            className="px-4 py-2 bg-terminal-border hover:bg-neon-lime hover:text-black rounded transition-all"
-          >
-            Load More
-          </button>
+          {hasMore && (
+            <div className="mt-4 text-center">
+              <button
+                onClick={loadMore}
+                disabled={loading}
+                className="px-4 py-2 bg-terminal-border text-white rounded hover:bg-gray-700 disabled:opacity-50"
+              >
+                {loading ? 'Loading...' : 'Load More'}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
