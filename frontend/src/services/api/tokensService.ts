@@ -65,6 +65,7 @@ export interface MarketStats {
 }
 
 export interface SearchResult {
+  slice(arg0: number, arg1: number): import("react").SetStateAction<SearchResult[]>;
   data: PumpToken[];
   suggestions?: string[];
   relatedTokens?: PumpToken[];

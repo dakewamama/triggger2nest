@@ -69,6 +69,11 @@ export class PumpController {
     };
   }
 
+  @Post('debug-accounts')
+  async debugAccounts(@Body() body: { mint: string; buyer: string }) {
+    return this.pumpService.debugTokenAccounts(body.mint, body.buyer);
+  }
+
   @Get('wallet/:address/transactions')
   async getWalletTransactions(
     @Param('address') address: string,

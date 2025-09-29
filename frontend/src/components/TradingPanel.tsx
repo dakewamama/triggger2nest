@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useWallet, useConnection } from '../providers/WalletProvider'
 import api from '@/services/api'
 import { toast } from 'sonner'
-import { VersionedTransaction } from '@solana/web3.js'
+import { Transaction, VersionedTransaction } from '@solana/web3.js'
 
 export default function TradingPanel({ token }: { token: any }) {
   const { publicKey, signTransaction, connected } = useWallet()
@@ -53,15 +53,23 @@ export default function TradingPanel({ token }: { token: any }) {
         : await api.sellToken(params)
 
       if (result.success && result.data?.transaction) {
-        // Deserialize the transaction
+        // Deserialize the transaction - handle both legacy and versioned
         const transactionBuffer = Buffer.from(result.data.transaction, 'base64')
-        const transaction = VersionedTransaction.deserialize(transactionBuffer)
         
-        // Sign the transaction
-        const signedTx = await signTransaction(transaction)
+        let signedTx;
+        try {
+          // Try versioned transaction first
+          const versionedTx = VersionedTransaction.deserialize(transactionBuffer)
+          // @ts-ignore - wallet adapter may not have proper types
+          signedTx = await signTransaction(versionedTx)
+        } catch (e) {
+          // Fall back to legacy transaction
+          const legacyTx = Transaction.from(transactionBuffer)
+          signedTx = await signTransaction(legacyTx)
+        }
         
         // Send the transaction
-        const signature = await connection.sendTransaction(signedTx)
+        const signature = await connection.sendRawTransaction(signedTx.serialize())
         
         // Confirm the transaction
         await connection.confirmTransaction(signature, 'confirmed')
