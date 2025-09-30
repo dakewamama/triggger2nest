@@ -1,5 +1,53 @@
 import { apiClient } from './client';
 
+export interface CreateTokenDto {
+  name: string;
+  symbol: string;
+  uri: string;
+  creator: string;
+}
+
+export interface BuyTokenDto {
+  mint: string;
+  publicKey: string;
+  solAmount: number;
+  slippage?: number;
+  priorityFee?: number;
+}
+
+export interface SellTokenDto {
+  mint: string;
+  publicKey: string;
+  tokenAmount: number;
+  slippage?: number;
+  priorityFee?: number;
+}
+
+export interface TokenResponse {
+  success: boolean;
+  data?: any;
+  error?: string;
+  message?: string;
+}
+
+export interface QuoteResponse {
+  mint: string;
+  action: 'buy' | 'sell';
+  amount: number;
+  estimatedPrice: number;
+  estimatedSolAmount: number;
+  estimatedTokenAmount: number;
+  priceImpact: number;
+  slippage: number;
+  fees: number;
+}
+
+export interface WalletBalance {
+  solBalance: number;
+  tokenBalances: any[];
+  portfolioValue: number;
+}
+
 export interface BuyTokenParams {
   mint: string;
   publicKey: string;
@@ -17,35 +65,89 @@ export interface SellTokenParams {
   priorityFee?: number;
 }
 
-export interface QuoteResponse {
-  mint: string;
-  action: 'buy' | 'sell';
-  amount: number;
-  estimatedPrice: number;
-  estimatedSolAmount: number;
-  estimatedTokenAmount: number;
-  priceImpact: number;
-  slippage: number;
-  fees: number;
-}
-
-export interface TransactionResponse {
-  success: boolean;
-  data?: {
-    transaction: string;
-    mint: string;
-    amount: number;
-    solAmount?: number;
-    action: string;
-  };
-  error?: string;
-  message?: string;
-}
-
 class PumpService {
   private readonly baseUrl = '/pump';
+  private readonly apiBaseUrl = '/api/pump'; // ✅ added for IDL routes
 
-  async buyToken(params: BuyTokenParams): Promise<TransactionResponse> {
+  /**
+   * Create a new token using IDL route
+   */
+  async createToken(tokenData: CreateTokenDto): Promise<TokenResponse> {
+    try {
+      console.log('[PumpService] Creating token (IDL version):', tokenData);
+      
+      // ✅ FIX: now points to /api/pump/create
+      const { data } = await apiClient.api.post(`${this.apiBaseUrl}/create`, tokenData);
+      
+      console.log('[PumpService] Create token response:', data);
+      
+      if (!data.success && data.error) {
+        throw new Error(data.error);
+      }
+      
+      return data;
+    } catch (error: any) {
+      console.error('[PumpService] Create token error:', error);
+      
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || 'Failed to create token',
+      };
+    }
+  }
+
+  /**
+   * Send a signed transaction to the network
+   */
+  async sendSignedTransaction(transactionData: { 
+    transaction: string 
+  }): Promise<TokenResponse> {
+    try {
+      console.log('[PumpService] Sending signed transaction');
+      
+      const { data } = await apiClient.api.post(
+        `${this.baseUrl}/send-transaction`, 
+        transactionData
+      );
+      
+      console.log('[PumpService] Send transaction response:', data);
+      
+      return data;
+    } catch (error: any) {
+      console.error('[PumpService] Send transaction error:', error);
+      
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || 'Failed to send transaction',
+      };
+    }
+  }
+
+  /**
+   * Wait for transaction confirmation (client-side using Solana connection)
+   */
+  async waitForConfirmation(signature: string, connection: any): Promise<boolean> {
+    try {
+      console.log(`[PumpService] Waiting for confirmation: ${signature}`);
+      
+      const result = await connection.confirmTransaction(signature, 'confirmed');
+      
+      if (result.value.err) {
+        throw new Error('Transaction failed');
+      }
+      
+      console.log(`[PumpService] Transaction confirmed: ${signature}`);
+      return true;
+    } catch (error) {
+      console.error('[PumpService] Confirmation error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Buy tokens from pump.fun
+   */
+  async buyToken(params: BuyTokenParams): Promise<TokenResponse> {
     try {
       console.log('[PumpService] Buy token request:', params);
       
@@ -64,14 +166,13 @@ class PumpService {
       
       const requestData = {
         mint: params.mint,
-        publicKey: params.publicKey,
-        amount: params.amount || params.solAmount, // Token amount or SOL amount
+        buyer: params.publicKey,  // Backend expects 'buyer' not 'publicKey'
         solAmount: params.solAmount,
-        slippage: params.slippage || 1.0,
+        slippage: params.slippage || 0.01,
         priorityFee: params.priorityFee || 0.00005
       };
       
-      const { data } = await apiClient.api.post(`${this.baseUrl}/buy-token`, requestData);
+      const { data } = await apiClient.api.post(`${this.baseUrl}/buy`, requestData);
       
       console.log('[PumpService] Buy token response:', data);
       
@@ -83,20 +184,17 @@ class PumpService {
     } catch (error: any) {
       console.error('[PumpService] Buy token error:', error);
       
-      // Extract error message from response
-      const errorMessage = error.response?.data?.error || 
-                          error.response?.data?.message || 
-                          error.message || 
-                          'Failed to create buy transaction';
-      
       return {
         success: false,
-        error: errorMessage
+        error: error.response?.data?.error || error.message || 'Failed to buy tokens',
       };
     }
   }
 
-  async sellToken(params: SellTokenParams): Promise<TransactionResponse> {
+  /**
+   * Sell tokens on pump.fun
+   */
+  async sellToken(params: SellTokenParams): Promise<TokenResponse> {
     try {
       console.log('[PumpService] Sell token request:', params);
       
@@ -115,13 +213,13 @@ class PumpService {
       
       const requestData = {
         mint: params.mint,
-        publicKey: params.publicKey,
-        amount: params.amount,
-        slippage: params.slippage || 1.0,
+        seller: params.publicKey,  // Backend expects 'seller' not 'publicKey'
+        tokenAmount: params.amount,
+        slippage: params.slippage || 0.01,
         priorityFee: params.priorityFee || 0.00005
       };
       
-      const { data } = await apiClient.api.post(`${this.baseUrl}/sell-token`, requestData);
+      const { data } = await apiClient.api.post(`${this.baseUrl}/sell`, requestData);
       
       console.log('[PumpService] Sell token response:', data);
       
@@ -133,42 +231,31 @@ class PumpService {
     } catch (error: any) {
       console.error('[PumpService] Sell token error:', error);
       
-      // Extract error message from response
-      const errorMessage = error.response?.data?.error || 
-                          error.response?.data?.message || 
-                          error.message || 
-                          'Failed to create sell transaction';
-      
       return {
         success: false,
-        error: errorMessage
+        error: error.response?.data?.error || error.message || 'Failed to sell tokens',
       };
     }
   }
 
+  /**
+   * Get price quote for buy/sell
+   */
   async getQuote(mint: string, amount: number, action: 'buy' | 'sell'): Promise<QuoteResponse | null> {
     try {
-      if (!mint || !amount || amount <= 0) {
-        console.warn('[PumpService] Invalid quote params');
-        return null;
-      }
-      
-      console.log(`[PumpService] Getting quote: ${action} ${amount} for ${mint}`);
+      console.log(`[PumpService] Getting ${action} quote for ${amount} on ${mint}`);
       
       const { data } = await apiClient.api.get(`${this.baseUrl}/quote/${mint}`, {
         params: { amount, action }
       });
       
-      console.log('[PumpService] Quote response:', data);
-      
       if (data.success && data.data) {
-        // Transform the response to match expected format
         const quote: QuoteResponse = {
           mint,
           action,
           amount,
           estimatedPrice: data.data.price || 0,
-          estimatedSolAmount: action === 'sell' ? (data.data.outputAmount || 0) : amount,
+          estimatedSolAmount: action === 'buy' ? amount : (data.data.outputAmount || 0),
           estimatedTokenAmount: action === 'buy' ? (data.data.outputAmount || 0) : amount,
           priceImpact: data.data.priceImpact || 0,
           slippage: data.data.slippageEstimate || 1,
@@ -185,9 +272,16 @@ class PumpService {
     }
   }
 
+  /**
+   * Get token information
+   */
   async getTokenInfo(mintAddress: string) {
     try {
+      console.log(`[PumpService] Fetching token info for: ${mintAddress}`);
+      
       const { data } = await apiClient.api.get(`${this.baseUrl}/token-info/${mintAddress}`);
+      
+      console.log('[PumpService] Token info response:', data);
       return data;
     } catch (error: any) {
       console.error('[PumpService] Get token info error:', error);
@@ -195,38 +289,15 @@ class PumpService {
     }
   }
 
-  async createToken(tokenData: any, imageFile?: File) {
+  /**
+   * Get wallet balances
+   */
+  async getWalletBalances(walletAddress: string): Promise<TokenResponse> {
     try {
-      const formData = new FormData();
+      console.log(`[PumpService] Fetching wallet balances for: ${walletAddress}`);
       
-      // Add token data
-      Object.keys(tokenData).forEach(key => {
-        if (tokenData[key]) {
-          formData.append(key, tokenData[key]);
-        }
-      });
-      
-      // Add image if provided
-      if (imageFile) {
-        formData.append('image', imageFile);
-      }
-      
-      const { data } = await apiClient.api.post(`${this.baseUrl}/create-token`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      
-      return data;
-    } catch (error: any) {
-      console.error('[PumpService] Create token error:', error);
-      throw error;
-    }
-  }
-
-  async getWalletBalances(walletAddress: string) {
-    try {
       const { data } = await apiClient.api.get(`${this.baseUrl}/wallet/${walletAddress}/balances`);
+      
       return data;
     } catch (error: any) {
       console.error('[PumpService] Get wallet balances error:', error);
@@ -241,11 +312,17 @@ class PumpService {
     }
   }
 
-  async getTransactionHistory(walletAddress: string, limit = 50) {
+  /**
+   * Get transaction history
+   */
+  async getTransactionHistory(walletAddress: string, limit = 50): Promise<TokenResponse> {
     try {
+      console.log(`[PumpService] Fetching transaction history for: ${walletAddress}`);
+      
       const { data } = await apiClient.api.get(`${this.baseUrl}/wallet/${walletAddress}/transactions`, {
         params: { limit }
       });
+      
       return data;
     } catch (error: any) {
       console.error('[PumpService] Get transaction history error:', error);

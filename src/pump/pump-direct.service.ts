@@ -19,6 +19,7 @@ import {
   createInitializeMintInstruction,
   createMintToInstruction,
 } from '@solana/spl-token';
+import { PumpIdlService } from './pump-idl.service';
 import * as bs58 from 'bs58';
 
 // Pump.fun Program ID (mainnet)
@@ -45,7 +46,9 @@ export class PumpDirectService {
 	private connection: Connection;
 	private program: anchor.Program | null = null;
 
-	constructor(private configService: ConfigService) {
+	constructor(private configService: ConfigService,
+		private pumpIdlService: PumpIdlService,
+	) {
 		const rpcUrl = this.configService.get('SOLANA_RPC_URL') || 'https://api.mainnet-beta.solana.com';
 		this.connection = new Connection(rpcUrl, 'confirmed');
 		this.initializeProgram();
@@ -390,7 +393,7 @@ export class PumpDirectService {
 			const accountInfo = await this.connection.getAccountInfo(bondingCurve);
 			
 			if (accountInfo) {
-				// Parse bonding curve data (you'd need to decode based on the actual structure)
+				// Parse bonding curve data (need to decode based on the actual structure)
 				return {
 					success: true,
 					data: {
@@ -481,7 +484,7 @@ export class PumpDirectService {
 			const { blockhash } = await this.connection.getLatestBlockhash();
 			transaction.recentBlockhash = blockhash;
 
-			// Simulate the transaction - using correct signature for @solana/web3.js
+			// Simulate the transaction using correct signature for @solana/web3.js
 			const simulation = await this.connection.simulateTransaction(
 				transaction
 			);
@@ -634,7 +637,7 @@ export class PumpDirectService {
 		}
 	}
 
-// Add to pump-direct.service.ts - Token Creation via IDL
+// Add to pump-direct.service.ts token Creation via IDL
 
 	/**
 	 * Create a new token on pump.fun using direct program interaction
@@ -650,25 +653,6 @@ export class PumpDirectService {
 		try {
 			this.logger.log('Attempting to create token directly on-chain');
 
-			/*
-			IMPORTANT: Pump.fun token creation process:
-			
-			1. The pump.fun program doesn't have a simple "create token" instruction
-			2. Token creation on pump.fun involves:
-			- Creating a new SPL token mint
-			- Creating a bonding curve account
-			- Initializing the curve with specific parameters
-			- Uploading metadata to IPFS/Arweave
-			- Registering with pump.fun's backend
-			
-			3. The actual token creation happens through pump.fun's backend API
-			which coordinates all these steps
-			
-			Without access to pump.fun's specific creation process and backend
-			coordination, we cannot directly create tokens via the program.
-			
-			The bonding curve program handles TRADING (buy/sell) but not CREATION.
-			*/
 
 			return {
 				success: false,
@@ -686,21 +670,6 @@ export class PumpDirectService {
 				}
 			};
 
-			// If pump.fun exposed a creation instruction, it would look something like:
-			/*
-			const mintKeypair = Keypair.generate();
-			const [bondingCurve] = await PublicKey.findProgramAddress(
-				[Buffer.from('bonding-curve'), mintKeypair.publicKey.toBuffer()],
-				PUMP_PROGRAM_ID
-			);
-			
-			// But this instruction doesn't exist in the pump.fun program
-			const createIx = {
-				programId: PUMP_PROGRAM_ID,
-				keys: [...],
-				data: Buffer.from([...])
-			};
-			*/
 
 		} catch (error: any) {
 			this.logger.error('Failed to create token:', error);

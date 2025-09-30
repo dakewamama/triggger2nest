@@ -84,16 +84,16 @@ export default function TokenGrid({ category = 'trending' }: TokenGridProps) {
     // Fix: Handle both milliseconds and seconds timestamps
     let timestampInMs = createdTimestamp;
     
-    // If the timestamp is too small, it's likely in seconds, convert to milliseconds
+
     // Unix timestamps in seconds are typically 10 digits, in milliseconds 13 digits
     if (createdTimestamp < 10000000000) {
       timestampInMs = createdTimestamp * 1000;
     }
     
     const now = Date.now(); // Current time in milliseconds
-    const diff = (now - timestampInMs) / 1000; // Difference in seconds
+    const diff = (now - timestampInMs) / 1000; 
     
-    // Ensure diff is positive (handle future timestamps or negative values)
+    // Ensure diff is positive 
     if (diff < 0) {
       return 'Just now';
     }

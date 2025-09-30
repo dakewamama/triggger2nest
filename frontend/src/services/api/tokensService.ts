@@ -1,4 +1,3 @@
-// frontend/src/services/api/tokensService.ts
 import { apiClient } from './client';
 
 export interface PumpToken {
@@ -65,7 +64,6 @@ export interface MarketStats {
 }
 
 export interface SearchResult {
-  slice(arg0: number, arg1: number): import("react").SetStateAction<SearchResult[]>;
   data: PumpToken[];
   suggestions?: string[];
   relatedTokens?: PumpToken[];
@@ -145,7 +143,7 @@ class TokensService {
     }
   }
 
-  // FIXED SEARCH METHOD - This is the main fix
+  // This is the main fix
   async searchTokens(query: string, filters?: any): Promise<SearchResult> {
     try {
       console.log(`[TokensService] Searching tokens with query: "${query}"`);
@@ -155,7 +153,7 @@ class TokensService {
       
       // IMPORTANT: Send query as a parameter
       const params = {
-        q: query,  // THIS IS CRITICAL - Must send query parameter
+        q: query, 
         limit: filters?.limit || 50,
         sortBy: filters?.sortBy || 'trending'
       };

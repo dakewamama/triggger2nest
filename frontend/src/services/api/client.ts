@@ -5,8 +5,6 @@ class ApiClient {
   private client: AxiosInstance;
   
   constructor() {
-    // IMPORTANT: Empty baseURL = use Vite proxy
-    // This way requests go to /tokens/trending instead of http://localhost:8000/tokens/trending
     this.client = axios.create({
       baseURL: '',  // Empty = use proxy
       timeout: 30000,

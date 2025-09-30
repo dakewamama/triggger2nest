@@ -3,7 +3,7 @@ import { TrendingUp, TrendingDown } from 'lucide-react'
 import { formatNumber, formatMarketCap, formatPercentage } from '@/utils/format'
 
 interface TokenCardProps {
-  token: any  // Using any for now since we don't have the exact type
+  token: any  
 }
 
 export default function TokenCard({ token }: TokenCardProps) {
