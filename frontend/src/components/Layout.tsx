@@ -33,14 +33,7 @@ export default function Layout({ children }: LayoutProps) {
               >
                 Create
               </Link>
-              <Link 
-                to="/trade" 
-                className={`font-bold transition-colors ${
-                  location.pathname === '/trade' ? 'text-neon-lime' : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                Trade
-              </Link>
+
             </div>
             
             {/* Wallet Button */}

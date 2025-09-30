@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import EnhancedSearch from '../components/EnhancedSearch';
 import TokenGrid from '../components/TokenGrid';
-import { TrendingUp, Clock, Star } from 'lucide-react';
+import { TrendingUp, Clock } from 'lucide-react';
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<'trending' | 'new' | 'featured'>('trending');
@@ -36,17 +36,6 @@ export default function HomePage() {
         >
           <Clock className="w-4 h-4" />
           New
-        </button>
-        <button
-          onClick={() => setActiveTab('featured')}
-          className={`px-4 py-2 rounded font-medium transition-all flex items-center gap-2 ${
-            activeTab === 'featured'
-              ? 'bg-neon-lime text-black'
-              : 'bg-terminal-border text-gray-400 hover:text-white'
-          }`}
-        >
-          <Star className="w-4 h-4" />
-          Featured
         </button>
       </div>
 
