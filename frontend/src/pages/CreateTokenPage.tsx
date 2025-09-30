@@ -1,242 +1,244 @@
-// frontend/src/pages/CreateTokenPage.tsx - With experimental creation & simulation
+// frontend/src/pages/CreateTokenPage.tsx - FIXED VERSION
 import { useState } from 'react';
-import { ExternalLink, Info, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Upload, AlertCircle } from 'lucide-react';
 import api from '@/services/api';
 import { toast } from 'sonner';
-import { useWallet } from '../providers/WalletProvider';
 
 export default function CreateTokenPage() {
-  const { publicKey, signTransaction, connected } = useWallet();
-  const [activeTab, setActiveTab] = useState<'pump' | 'experimental'>('pump');
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [simulationResult, setSimulationResult] = useState<any>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     symbol: '',
-    uri: '',
+    description: '',
+    twitter: '',
+    telegram: '',
+    website: '',
   });
 
-  const handleExperimentalCreate = async () => {
-    if (!connected || !publicKey) {
-      toast.error('Please connect your wallet');
-      return;
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        toast.error('Image size must be less than 5MB');
+        return;
+      }
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
+  };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validate required fields
     if (!formData.name || !formData.symbol) {
       toast.error('Name and Symbol are required');
       return;
     }
 
+    if (!imageFile) {
+      toast.error('Token image is required');
+      return;
+    }
+
     setLoading(true);
     try {
-      // Call experimental create endpoint
-      const result = await api.post('/pump/create-experimental', {
+      // Create FormData for multipart upload
+      const data = new FormData();
+      data.append('name', formData.name);
+      data.append('symbol', formData.symbol.toUpperCase());
+      data.append('description', formData.description || '');
+      data.append('twitter', formData.twitter || '');
+      data.append('telegram', formData.telegram || '');
+      data.append('website', formData.website || '');
+      data.append('image', imageFile);
+
+      console.log('Creating token with data:', {
         name: formData.name,
-        symbol: formData.symbol.toUpperCase(),
-        uri: formData.uri || 'https://arweave.net/default-pump-metadata',
-        creator: publicKey.toString(),
+        symbol: formData.symbol,
+        description: formData.description,
+        hasImage: !!imageFile
       });
 
-      if (result.data.success && result.data.data?.transaction) {
-        // Simulate first
-        const simResult = await api.post('/pump/simulate', {
-          transaction: result.data.data.transaction,
-        });
+      const result = await api.createToken(data);
 
-        setSimulationResult(simResult.data);
-
-        if (simResult.data.willSucceed) {
-          toast.success('Simulation passed! Transaction will succeed.');
-          
-          // Ask to proceed
-          if (window.confirm('Simulation passed. Do you want to sign and send the transaction?')) {
-            // Sign and send
-            const tx = Transaction.from(Buffer.from(result.data.data.transaction, 'base64'));
-            const signed = await signTransaction(tx);
-            const signature = await connection.sendRawTransaction(signed.serialize());
-            
-            toast.success(`Token created! Mint: ${result.data.data.mint}`);
-            toast.success(`Transaction: ${signature}`);
-          }
+      if (result.success) {
+        toast.success('Token created successfully!');
+        if (result.data?.mint) {
+          navigate(`/token/${result.data.mint}`);
         } else {
-          toast.error(simResult.data.message || 'Simulation failed. Transaction would not succeed.');
+          navigate('/');
         }
       } else {
-        toast.error(result.data.error || 'Failed to create token');
+        toast.error(result.error || 'Failed to create token');
       }
     } catch (error: any) {
-      console.error('Create error:', error);
-      toast.error(error.message || 'Failed to create token');
+      console.error('Create token error:', error);
+      const errorMessage = error.response?.data?.error || 
+                          error.response?.data?.message || 
+                          error.message || 
+                          'Failed to create token';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold mb-8 text-neon-lime font-display">
-        Create Token
+    <div className="max-w-2xl mx-auto">
+      <h1 className="text-3xl font-bold mb-8 text-green-400 font-display">
+        Create New Token
       </h1>
 
-      {/* Tab Selection */}
-      <div className="flex gap-2 mb-6">
-        <button
-          onClick={() => setActiveTab('pump')}
-          className={`px-4 py-2 rounded font-medium transition-all ${
-            activeTab === 'pump'
-              ? 'bg-neon-lime text-black'
-              : 'bg-terminal-border text-gray-400'
-          }`}
-        >
-          Official Method
-        </button>
-        <button
-          onClick={() => setActiveTab('experimental')}
-          className={`px-4 py-2 rounded font-medium transition-all ${
-            activeTab === 'experimental'
-              ? 'bg-neon-cyan text-black'
-              : 'bg-terminal-border text-gray-400'
-          }`}
-        >
-          Experimental (IDL)
-        </button>
+      <div className="bg-gray-800 rounded-lg p-6 mb-4 border border-yellow-600">
+        <div className="flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-yellow-500 mt-0.5" />
+          <div className="text-sm text-gray-300">
+            <p className="font-medium text-yellow-500 mb-1">Token Creation Currently Disabled</p>
+            <p>Token creation requires pump.fun API access which is currently unavailable.</p>
+            <p className="mt-2">To create tokens:</p>
+            <ul className="list-disc list-inside ml-2 mt-1">
+              <li>Use pump.fun website directly</li>
+              <li>Or wait for API access to be restored</li>
+            </ul>
+          </div>
+        </div>
       </div>
 
-      {activeTab === 'pump' ? (
-        <div className="space-y-6">
-          <div className="terminal-card border-neon-lime">
-            <h3 className="font-bold mb-4">Recommended: Use Pump.fun Website</h3>
-            <p className="text-gray-300 mb-4">
-              The official way to create tokens on pump.fun is through their website.
-            </p>
-            <a 
-              href="https://pump.fun" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-neon-lime text-black rounded font-bold hover:bg-neon-lime/90"
-            >
-              Go to Pump.fun <ExternalLink className="w-4 h-4" />
-            </a>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Token Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:border-green-400"
+              placeholder="My Awesome Token"
+              required
+              maxLength={32}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Symbol <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.symbol}
+              onChange={(e) => setFormData({ ...formData, symbol: e.target.value.toUpperCase() })}
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:border-green-400"
+              placeholder="TOKEN"
+              required
+              maxLength={10}
+            />
           </div>
         </div>
-      ) : (
-        <div className="space-y-6">
-          {/* Warning */}
-          <div className="terminal-card border-yellow-600">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-yellow-500 mt-0.5" />
-              <div>
-                <h3 className="font-bold text-yellow-500 mb-2">
-                  Experimental Feature
-                </h3>
-                <p className="text-sm text-gray-300">
-                  This uses reverse-engineered instructions and may not work.
-                  Token creation might fail even if simulation passes.
-                  Use pump.fun website for guaranteed results.
-                </p>
-              </div>
-            </div>
-          </div>
 
-          {/* Form */}
-          <div className="terminal-card">
-            <h3 className="font-bold mb-4">Experimental Token Creation</h3>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Token Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full bg-terminal-bg border border-terminal-border rounded px-4 py-2 focus:outline-none focus:border-neon-lime"
-                  placeholder="My Token"
-                  maxLength={32}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Symbol <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.symbol}
-                  onChange={(e) => setFormData({ ...formData, symbol: e.target.value.toUpperCase() })}
-                  className="w-full bg-terminal-bg border border-terminal-border rounded px-4 py-2 focus:outline-none focus:border-neon-lime"
-                  placeholder="TOKEN"
-                  maxLength={10}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Metadata URI (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={formData.uri}
-                  onChange={(e) => setFormData({ ...formData, uri: e.target.value })}
-                  className="w-full bg-terminal-bg border border-terminal-border rounded px-4 py-2 focus:outline-none focus:border-neon-lime"
-                  placeholder="https://arweave.net/..."
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Leave empty for default metadata
-                </p>
-              </div>
-
-              <button
-                onClick={handleExperimentalCreate}
-                disabled={loading || !connected || !formData.name || !formData.symbol}
-                className="w-full py-3 bg-neon-cyan text-black rounded font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Creating...' : 'Create Token (Experimental)'}
-              </button>
-
-              {!connected && (
-                <p className="text-center text-yellow-500 text-sm">
-                  Connect your wallet to create tokens
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Simulation Result */}
-          {simulationResult && (
-            <div className={`terminal-card border ${
-              simulationResult.willSucceed ? 'border-green-600' : 'border-red-600'
-            }`}>
-              <div className="flex items-start gap-3">
-                {simulationResult.willSucceed ? (
-                  <CheckCircle className="w-5 h-5 text-green-500 mt-0.5" />
-                ) : (
-                  <XCircle className="w-5 h-5 text-red-500 mt-0.5" />
-                )}
-                <div>
-                  <h4 className="font-bold mb-2">
-                    Simulation {simulationResult.willSucceed ? 'Passed' : 'Failed'}
-                  </h4>
-                  <p className="text-sm text-gray-300">
-                    {simulationResult.message}
-                  </p>
-                  {simulationResult.logs && simulationResult.logs.length > 0 && (
-                    <details className="mt-2">
-                      <summary className="cursor-pointer text-xs text-gray-500">
-                        View logs
-                      </summary>
-                      <pre className="mt-2 p-2 bg-black/50 rounded text-xs overflow-x-auto">
-                        {simulationResult.logs.slice(0, 10).join('\n')}
-                      </pre>
-                    </details>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+        <div>
+          <label className="block text-sm font-medium mb-2">Description</label>
+          <textarea
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:border-green-400 h-32"
+            placeholder="Describe your token..."
+            maxLength={500}
+          />
         </div>
-      )}
+
+        <div>
+          <label className="block text-sm font-medium mb-2">
+            Token Image <span className="text-red-500">*</span>
+          </label>
+          <div className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center">
+            {imagePreview ? (
+              <div className="space-y-4">
+                <img 
+                  src={imagePreview} 
+                  alt="Preview" 
+                  className="w-32 h-32 mx-auto rounded-lg object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImageFile(null);
+                    setImagePreview(null);
+                  }}
+                  className="text-red-400 hover:text-red-300"
+                >
+                  Remove Image
+                </button>
+              </div>
+            ) : (
+              <label className="cursor-pointer">
+                <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                <p className="text-gray-400 mb-2">Click to upload image</p>
+                <p className="text-xs text-gray-500">PNG, JPG up to 5MB</p>
+                <input
+                  type="file"
+                  onChange={handleImageChange}
+                  accept="image/png,image/jpeg,image/gif"
+                  className="hidden"
+                />
+              </label>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">Twitter</label>
+            <input
+              type="url"
+              value={formData.twitter}
+              onChange={(e) => setFormData({ ...formData, twitter: e.target.value })}
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:border-green-400"
+              placeholder="https://x.com/..."
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Telegram</label>
+            <input
+              type="url"
+              value={formData.telegram}
+              onChange={(e) => setFormData({ ...formData, telegram: e.target.value })}
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:border-green-400"
+              placeholder="https://t.me/..."
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Website</label>
+            <input
+              type="url"
+              value={formData.website}
+              onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:border-green-400"
+              placeholder="https://..."
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading || !formData.name || !formData.symbol || !imageFile}
+          className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loading ? 'Creating Token...' : 'Create Token'}
+        </button>
+      </form>
     </div>
   );
 }

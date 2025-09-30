@@ -1,4 +1,3 @@
-// frontend/src/components/TokenGrid.tsx - With token age display
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TrendingUp, RefreshCw, Clock, Twitter, Globe } from 'lucide-react';
@@ -82,8 +81,22 @@ export default function TokenGrid({ category = 'trending' }: TokenGridProps) {
   const getTokenAge = (createdTimestamp?: number) => {
     if (!createdTimestamp) return '';
     
-    const now = Date.now() / 1000; // Current time in seconds
-    const diff = now - createdTimestamp; // Difference in seconds
+    // Fix: Handle both milliseconds and seconds timestamps
+    let timestampInMs = createdTimestamp;
+    
+    // If the timestamp is too small, it's likely in seconds, convert to milliseconds
+    // Unix timestamps in seconds are typically 10 digits, in milliseconds 13 digits
+    if (createdTimestamp < 10000000000) {
+      timestampInMs = createdTimestamp * 1000;
+    }
+    
+    const now = Date.now(); // Current time in milliseconds
+    const diff = (now - timestampInMs) / 1000; // Difference in seconds
+    
+    // Ensure diff is positive (handle future timestamps or negative values)
+    if (diff < 0) {
+      return 'Just now';
+    }
     
     // Less than 1 minute
     if (diff < 60) {
@@ -178,7 +191,7 @@ export default function TokenGrid({ category = 'trending' }: TokenGridProps) {
           <div
             key={token.mint}
             onClick={() => navigate(`/token/${token.mint}`)}
-            className="terminal-card hover:border-neon-lime cursor-pointer transition-all"
+            className="terminal-card hover:border-neon-lime cursor-pointer transition-all hover:scale-[1.02]"
           >
             {/* Token Image */}
             <div className="relative mb-3">
@@ -221,30 +234,38 @@ export default function TokenGrid({ category = 'trending' }: TokenGridProps) {
                 {formatMarketCap(token.usd_market_cap)}
               </div>
               
-              {/* Graduation % */}
-              <div className="text-xs text-gray-500 mt-1">
-                {getGraduationPercent(token.usd_market_cap).toFixed(0)}% to grad
+              {/* Graduation Progress Bar */}
+              <div className="mt-2">
+                <div className="text-xs text-gray-500 mb-1">
+                  {getGraduationPercent(token.usd_market_cap).toFixed(0)}% to grad
+                </div>
+                <div className="w-full h-1 bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-neon-lime to-neon-cyan transition-all duration-300"
+                    style={{ width: `${getGraduationPercent(token.usd_market_cap)}%` }}
+                  />
+                </div>
               </div>
 
               {/* Social Links */}
               {(token.twitter || token.website) && (
-                <div className="flex gap-2 mt-2">
+                <div className="flex gap-2 mt-2 pt-2 border-t border-terminal-border">
                   {token.twitter && (
                     <button
                       onClick={(e) => handleSocialClick(e, token.twitter)}
-                      className="p-1 bg-gray-700 rounded hover:bg-gray-600 transition-colors"
+                      className="p-1.5 bg-terminal-bg rounded hover:bg-terminal-border transition-colors"
                       title="Twitter"
                     >
-                      <Twitter className="w-3 h-3" />
+                      <Twitter className="w-3 h-3 text-gray-400" />
                     </button>
                   )}
                   {token.website && (
                     <button
                       onClick={(e) => handleSocialClick(e, token.website)}
-                      className="p-1 bg-gray-700 rounded hover:bg-gray-600 transition-colors"
+                      className="p-1.5 bg-terminal-bg rounded hover:bg-terminal-border transition-colors"
                       title="Website"
                     >
-                      <Globe className="w-3 h-3" />
+                      <Globe className="w-3 h-3 text-gray-400" />
                     </button>
                   )}
                 </div>
@@ -253,16 +274,6 @@ export default function TokenGrid({ category = 'trending' }: TokenGridProps) {
           </div>
         ))}
       </div>
-
-      <style>{`
-        @keyframes spin-slow {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        .animate-spin-slow {
-          animation: spin-slow 3s linear infinite;
-        }
-      `}</style>
     </div>
   );
 }
