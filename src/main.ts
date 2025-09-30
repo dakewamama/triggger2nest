@@ -1,4 +1,3 @@
-// src/main.ts - Fixed CORS configuration
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
@@ -7,10 +6,10 @@ import { ConfigService } from '@nestjs/config';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
-  // Get config service
+  
   const configService = app.get(ConfigService);
   
-  // IMPORTANT: Enable CORS for frontend - MUST be before other middleware
+  // IMPORTANT: Enable CORS for frontend 
   app.enableCors({
     origin: [
       'http://localhost:5173',

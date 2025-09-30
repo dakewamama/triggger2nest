@@ -20,10 +20,10 @@ import { PumpModule } from './pump/pump.module';
         fileSize: 5 * 1024 * 1024, // 5MB
       },
     }),
-    PumpModule,      // Main pump.fun operations
-    TokensModule,    // Token data and listings
-    WalletModule,    // Wallet utilities
-    TradingModule,   // Trading operations
+    PumpModule,
+    TokensModule,
+    WalletModule,
+    TradingModule,
   ],
   controllers: [AppController],
   providers: [AppService],
