@@ -137,12 +137,19 @@ export default function TokenDetailsPage() {
           </div>
         </div>
 
-        {/* Trades */}
-        <TokenTrades mint={mint!} />
+        {/* Trading Panel - Mobile Only (order-2 on mobile, hidden on desktop) */}
+        <div className="lg:hidden order-2">
+          <TradingPanel token={token} />
+        </div>
+
+        {/* Trades (order-3 on mobile) */}
+        <div className="order-3">
+          <TokenTrades mint={mint!} />
+        </div>
       </div>
 
-      {/* Trading Panel */}
-      <div className="lg:sticky lg:top-24">
+      {/* Trading Panel - Desktop Only (sticky on right side) */}
+      <div className="hidden lg:block lg:sticky lg:top-24">
         <TradingPanel token={token} />
       </div>
     </div>

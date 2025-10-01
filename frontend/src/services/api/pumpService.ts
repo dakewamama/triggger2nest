@@ -67,16 +67,12 @@ export interface SellTokenParams {
 
 class PumpService {
   private readonly baseUrl = '/pump';
-  private readonly apiBaseUrl = '/api/pump'; // ✅ added for IDL routes
+  private readonly apiBaseUrl = '/api/pump';
 
-  /**
-   * Create a new token using IDL route
-   */
   async createToken(tokenData: CreateTokenDto): Promise<TokenResponse> {
     try {
       console.log('[PumpService] Creating token (IDL version):', tokenData);
       
-      // ✅ FIX: now points to /api/pump/create
       const { data } = await apiClient.api.post(`${this.apiBaseUrl}/create`, tokenData);
       
       console.log('[PumpService] Create token response:', data);
@@ -96,9 +92,6 @@ class PumpService {
     }
   }
 
-  /**
-   * Send a signed transaction to the network
-   */
   async sendSignedTransaction(transactionData: { 
     transaction: string 
   }): Promise<TokenResponse> {
@@ -123,9 +116,6 @@ class PumpService {
     }
   }
 
-  /**
-   * Wait for transaction confirmation (client-side using Solana connection)
-   */
   async waitForConfirmation(signature: string, connection: any): Promise<boolean> {
     try {
       console.log(`[PumpService] Waiting for confirmation: ${signature}`);
@@ -144,14 +134,10 @@ class PumpService {
     }
   }
 
-  /**
-   * Buy tokens from pump.fun
-   */
   async buyToken(params: BuyTokenParams): Promise<TokenResponse> {
     try {
       console.log('[PumpService] Buy token request:', params);
       
-      // Validate params
       if (!params.publicKey || params.publicKey === 'wallet_not_connected') {
         throw new Error('Wallet not connected');
       }
@@ -166,13 +152,13 @@ class PumpService {
       
       const requestData = {
         mint: params.mint,
-        buyer: params.publicKey,  // Backend expects 'buyer' not 'publicKey'
+        publicKey: params.publicKey,  // FIXED: Changed from "buyer" to "publicKey"
         solAmount: params.solAmount,
         slippage: params.slippage || 0.01,
         priorityFee: params.priorityFee || 0.00005
       };
       
-      const { data } = await apiClient.api.post(`${this.baseUrl}/buy`, requestData);
+      const { data } = await apiClient.api.post(`${this.baseUrl}/buy-token`, requestData);
       
       console.log('[PumpService] Buy token response:', data);
       
@@ -191,14 +177,10 @@ class PumpService {
     }
   }
 
-  /**
-   * Sell tokens on pump.fun
-   */
   async sellToken(params: SellTokenParams): Promise<TokenResponse> {
     try {
       console.log('[PumpService] Sell token request:', params);
       
-      // Validate params
       if (!params.publicKey || params.publicKey === 'wallet_not_connected') {
         throw new Error('Wallet not connected');
       }
@@ -213,13 +195,13 @@ class PumpService {
       
       const requestData = {
         mint: params.mint,
-        seller: params.publicKey,  // Backend expects 'seller' not 'publicKey'
-        tokenAmount: params.amount,
+        publicKey: params.publicKey,  // FIXED: Changed from "seller" to "publicKey"
+        amount: params.amount,
         slippage: params.slippage || 0.01,
         priorityFee: params.priorityFee || 0.00005
       };
       
-      const { data } = await apiClient.api.post(`${this.baseUrl}/sell`, requestData);
+      const { data } = await apiClient.api.post(`${this.baseUrl}/sell-token`, requestData);
       
       console.log('[PumpService] Sell token response:', data);
       
@@ -238,9 +220,6 @@ class PumpService {
     }
   }
 
-  /**
-   * Get price quote for buy/sell
-   */
   async getQuote(mint: string, amount: number, action: 'buy' | 'sell'): Promise<QuoteResponse | null> {
     try {
       console.log(`[PumpService] Getting ${action} quote for ${amount} on ${mint}`);
@@ -272,9 +251,6 @@ class PumpService {
     }
   }
 
-  /**
-   * Get token information
-   */
   async getTokenInfo(mintAddress: string) {
     try {
       console.log(`[PumpService] Fetching token info for: ${mintAddress}`);
@@ -289,9 +265,6 @@ class PumpService {
     }
   }
 
-  /**
-   * Get wallet balances
-   */
   async getWalletBalances(walletAddress: string): Promise<TokenResponse> {
     try {
       console.log(`[PumpService] Fetching wallet balances for: ${walletAddress}`);
@@ -312,9 +285,6 @@ class PumpService {
     }
   }
 
-  /**
-   * Get transaction history
-   */
   async getTransactionHistory(walletAddress: string, limit = 50): Promise<TokenResponse> {
     try {
       console.log(`[PumpService] Fetching transaction history for: ${walletAddress}`);

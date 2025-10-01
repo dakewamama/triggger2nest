@@ -1,3 +1,4 @@
+// src/utils/format.ts
 // Formatting utilities for the application
 
 export const LAMPORTS_PER_SOL = 1e9
@@ -30,20 +31,43 @@ export function formatNumber(num: number): string {
 
 /**
  * Format price with appropriate decimal places
+ * Shows leading zeros until significant digits for very small prices
  */
 export function formatPrice(price: number): string {
   if (!price || isNaN(price)) return '0.00'
   
-  // For very small prices, use exponential notation
-  if (price < 0.00001) return price.toExponential(2)
+  // For prices >= $1, show 2 decimals
+  if (price >= 1) {
+    return price.toFixed(2)
+  }
   
-  // For small prices, show more decimals
-  if (price < 0.01) return price.toFixed(6)
-  if (price < 1) return price.toFixed(4)
-  if (price < 100) return price.toFixed(2)
+  // For prices >= $0.01, show up to 4 decimals
+  if (price >= 0.01) {
+    return price.toFixed(4)
+  }
   
-  // For large prices, use formatNumber
-  return formatNumber(price)
+  // For very small prices (< $0.01), show leading zeros + 2 significant digits
+  // Convert to string with many decimals
+  let priceStr = price.toFixed(20)
+  
+  // Remove trailing zeros
+  priceStr = priceStr.replace(/0+$/, '')
+  
+  // Find position of first non-zero digit after decimal
+  const afterDecimal = priceStr.split('.')[1] || ''
+  let significantPos = 0;
+  
+  for (let i = 0; i < afterDecimal.length; i++) {
+    if (afterDecimal[i] !== '0') {
+      significantPos = i
+      break
+    }
+  }
+  
+  // Show all leading zeros + 2 significant digits
+  const decimalsToShow = significantPos + 3
+  
+  return price.toFixed(Math.min(decimalsToShow, 12))
 }
 
 /**

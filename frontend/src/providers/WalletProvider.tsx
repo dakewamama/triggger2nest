@@ -1,6 +1,19 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { PublicKey, Transaction, Connection } from '@solana/web3.js';
 
+// Get RPC URL from environment
+const getRPCUrl = (): string => {
+  const envRpc = import.meta.env.VITE_SOLANA_RPC_URL;
+  
+  if (envRpc) {
+    console.log('✅ Using RPC from .env:', envRpc.substring(0, 40) + '...');
+    return envRpc;
+  }
+  
+  console.warn('⚠️ VITE_SOLANA_RPC_URL not found, using default RPC');
+  return 'https://api.mainnet-beta.solana.com';
+};
+
 // Wallet Context
 interface WalletContextType {
   publicKey: PublicKey | null;
@@ -41,9 +54,10 @@ export const useWallet = () => {
 export const useConnection = () => {
   const context = useContext(ConnectionContext);
   if (!context) {
-    // Return default connection if no provider
+    // FIXED: Use environment variable instead of hardcoded URL
+    const rpcUrl = getRPCUrl();
     return {
-      connection: new Connection('https://api.mainnet-beta.solana.com', 'confirmed')
+      connection: new Connection(rpcUrl, 'confirmed')
     };
   }
   return context;
@@ -91,8 +105,9 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
   
-  // Create connection (HTTP-only to avoid WebSocket issues)
-  const connection = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
+  // FIXED: Create connection using environment variable
+  const rpcUrl = getRPCUrl();
+  const connection = new Connection(rpcUrl, 'confirmed');
 
   const connect = async () => {
     try {

@@ -40,6 +40,9 @@ const VIRTUAL_TOKEN_RESERVES = 1073000000 * 1000000;
 const INITIAL_REAL_TOKEN_RESERVES = 793100000 * 1000000;
 const TOKEN_DECIMALS = 6;
 
+// Estimated compute units for pump.fun transactions
+const ESTIMATED_COMPUTE_UNITS = 200000;
+
 @Injectable()
 export class PumpDirectService {
 	private readonly logger = new Logger(PumpDirectService.name);
@@ -240,9 +243,15 @@ export class PumpDirectService {
 
 			const transaction = new Transaction();
 
-			// Add priority fee if specified
+			// Add priority fee if specified - FIXED CALCULATION
 			if (params.priorityFee && params.priorityFee > 0) {
-				const microLamports = Math.floor(params.priorityFee * LAMPORTS_PER_SOL * 1000000);
+				// params.priorityFee is the TOTAL fee in SOL
+				// Convert to lamports per compute unit, then to micro-lamports
+				const lamportsPerCU = (params.priorityFee * LAMPORTS_PER_SOL) / ESTIMATED_COMPUTE_UNITS;
+				const microLamports = Math.floor(lamportsPerCU * 1000000);
+				
+				this.logger.log(`Priority fee: ${params.priorityFee} SOL = ${microLamports} micro-lamports per CU`);
+				
 				transaction.add(
 					ComputeBudgetProgram.setComputeUnitPrice({ microLamports })
 				);
@@ -331,9 +340,15 @@ export class PumpDirectService {
 
 			const transaction = new Transaction();
 
-			// Add priority fee if specified
+			// Add priority fee if specified - FIXED CALCULATION
 			if (params.priorityFee && params.priorityFee > 0) {
-				const microLamports = Math.floor(params.priorityFee * LAMPORTS_PER_SOL * 1000000);
+				// params.priorityFee is the TOTAL fee in SOL
+				// Convert to lamports per compute unit, then to micro-lamports
+				const lamportsPerCU = (params.priorityFee * LAMPORTS_PER_SOL) / ESTIMATED_COMPUTE_UNITS;
+				const microLamports = Math.floor(lamportsPerCU * 1000000);
+				
+				this.logger.log(`Priority fee: ${params.priorityFee} SOL = ${microLamports} micro-lamports per CU`);
+				
 				transaction.add(
 					ComputeBudgetProgram.setComputeUnitPrice({ microLamports })
 				);

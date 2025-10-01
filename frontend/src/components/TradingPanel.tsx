@@ -1,8 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useWallet, useConnection } from '../providers/WalletProvider'
 import api from '@/services/api'
 import { toast } from 'sonner'
 import { Transaction, VersionedTransaction } from '@solana/web3.js'
+import { formatPrice, formatNumber } from '@/utils/format'
+
+interface EstimatedValues {
+  price: number
+  tokensYouGet: number
+  solYouGet: number
+  totalCost: number
+  totalTokens: number
+}
 
 export default function TradingPanel({ token }: { token: any }) {
   const { publicKey, signTransaction, connected } = useWallet()
@@ -10,28 +19,15 @@ export default function TradingPanel({ token }: { token: any }) {
   const [mode, setMode] = useState<'buy' | 'sell'>('buy')
   const [amount, setAmount] = useState('')
   const [loading, setLoading] = useState(false)
-  const [quote, setQuote] = useState<any>(null)
-
-  useEffect(() => {
-    if (amount && parseFloat(amount) > 0) {
-      handleQuote()
-    }
-  }, [amount, mode])
-
-  const handleQuote = async () => {
-    if (!amount || parseFloat(amount) <= 0) return
-    
-    try {
-      const quoteData = await api.getQuote(token.mint, parseFloat(amount), mode)
-      setQuote(quoteData)
-    } catch (error) {
-      console.error('Quote error:', error)
-    }
-  }
 
   const handleTrade = async () => {
     if (!connected || !publicKey || !signTransaction) {
       toast.error('Please connect your wallet first')
+      return
+    }
+
+    if (!amount || parseFloat(amount) <= 0) {
+      toast.error('Please enter a valid amount')
       return
     }
 
@@ -53,32 +49,28 @@ export default function TradingPanel({ token }: { token: any }) {
         : await api.sellToken(params)
 
       if (result.success && result.data?.transaction) {
-        // Deserialize the transaction - handle both legacy and versioned
         const transactionBuffer = Buffer.from(result.data.transaction, 'base64')
         
         let signedTx;
         try {
-          // Try versioned transaction first
           const versionedTx = VersionedTransaction.deserialize(transactionBuffer)
-          // @ts-ignore - wallet adapter may not have proper types
+          // @ts-ignore
           signedTx = await signTransaction(versionedTx)
         } catch (e) {
-          // Fall back to legacy transaction
           const legacyTx = Transaction.from(transactionBuffer)
           signedTx = await signTransaction(legacyTx)
         }
         
-        // Send the transaction
         const signature = await connection.sendRawTransaction(signedTx.serialize())
         
-        // Confirm the transaction
+        toast.success('Transaction sent! Confirming...')
+        
         await connection.confirmTransaction(signature, 'confirmed')
         
-        toast.success(`${mode === 'buy' ? 'Buy' : 'Sell'} transaction successful!`)
-        toast.success(`Transaction: ${signature}`)
+        toast.success(`${mode === 'buy' ? 'Buy' : 'Sell'} successful!`)
+        toast.info(`Signature: ${signature.slice(0, 8)}...`)
         
-        // Refresh quote
-        handleQuote()
+        setAmount('')
       } else {
         toast.error(result.error || 'Transaction failed')
       }
@@ -90,8 +82,39 @@ export default function TradingPanel({ token }: { token: any }) {
     }
   }
 
+  const getEstimatedValues = (): EstimatedValues | null => {
+    if (!amount || parseFloat(amount) <= 0 || !token.price) {
+      return null
+    }
+
+    const amountNum = parseFloat(amount)
+    const tokenPrice = token.price || 0
+    
+    if (mode === 'buy') {
+      const estimatedTokens = tokenPrice > 0 ? amountNum / tokenPrice : 0
+      return {
+        price: tokenPrice,
+        tokensYouGet: estimatedTokens,
+        solYouGet: 0,
+        totalCost: amountNum,
+        totalTokens: 0
+      }
+    } else {
+      const estimatedSOL = amountNum * tokenPrice
+      return {
+        price: tokenPrice,
+        tokensYouGet: 0,
+        solYouGet: estimatedSOL,
+        totalCost: 0,
+        totalTokens: amountNum
+      }
+    }
+  }
+
+  const estimates = getEstimatedValues()
+
   return (
-    <div className="terminal-card sticky top-20">
+    <div className="terminal-card">
       <h2 className="font-display text-xl font-bold mb-4">Trade {token.symbol}</h2>
 
       {!connected ? (
@@ -131,27 +154,50 @@ export default function TradingPanel({ token }: { token: any }) {
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder={mode === 'buy' ? '0.1 SOL' : '1000'}
+              placeholder={mode === 'buy' ? '0.1' : '1000'}
               className="w-full bg-terminal-bg border border-terminal-border rounded p-3 text-white focus:border-neon-lime focus:outline-none"
               step="0.01"
               min="0"
             />
           </div>
 
-          {quote && (
-            <div className="bg-terminal-bg rounded p-3 mb-4 text-sm">
-              <div className="flex justify-between mb-2">
-                <span className="text-gray-400">Est. Price:</span>
-                <span>${quote.estimatedPrice?.toFixed(6)}</span>
-              </div>
+          {estimates && (
+            <div className="bg-terminal-bg border border-terminal-border rounded p-3 mb-4 space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-400">You'll {mode === 'buy' ? 'get' : 'receive'}:</span>
-                <span>
-                  {mode === 'buy' 
-                    ? `~${quote.estimatedTokenAmount?.toFixed(2)} ${token.symbol}`
-                    : `~${quote.estimatedSolAmount?.toFixed(4)} SOL`
-                  }
-                </span>
+                <span className="text-gray-400">Token Price:</span>
+                <span className="font-mono">${formatPrice(estimates.price)}</span>
+              </div>
+              
+              {mode === 'buy' ? (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">You're paying:</span>
+                    <span className="font-mono">{estimates.totalCost} SOL</span>
+                  </div>
+                  <div className="flex justify-between border-t border-terminal-border pt-2">
+                    <span className="text-gray-400">You'll receive:</span>
+                    <span className="font-mono text-neon-lime">
+                      ~{formatNumber(estimates.tokensYouGet)} {token.symbol}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">You're selling:</span>
+                    <span className="font-mono">{formatNumber(estimates.totalTokens)} {token.symbol}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-terminal-border pt-2">
+                    <span className="text-gray-400">You'll receive:</span>
+                    <span className="font-mono text-neon-lime">
+                      ~{estimates.solYouGet.toFixed(4)} SOL
+                    </span>
+                  </div>
+                </>
+              )}
+              
+              <div className="text-xs text-gray-500 pt-2 border-t border-terminal-border">
+                Includes 1% slippage • Prices are estimates
               </div>
             </div>
           )}
