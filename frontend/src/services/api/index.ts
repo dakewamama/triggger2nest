@@ -1,5 +1,6 @@
 import { pumpService } from './pumpService';
 import { tokensService } from './tokensService';
+import { portfolioService } from './portfolioService';
 import { apiClient } from './client';
 
 // Export types from pumpService
@@ -23,10 +24,18 @@ export type {
   DashboardData
 } from './tokensService';
 
+// Export types from portfolioService
+export type {
+  PortfolioToken,
+  Portfolio,
+  Transaction
+} from './portfolioService';
+
 // ApiService class with arrow functions for better binding
 export class ApiService {
   pump = pumpService;
   tokens = tokensService;
+  portfolio = portfolioService;
   client = apiClient;
   
   healthCheck = async () => {
@@ -90,17 +99,45 @@ export class ApiService {
   }
   
   /**
-   * Get wallet balances
+   * Get wallet balances (deprecated - use portfolio.getPortfolio)
    */
   getWalletBalances = async (walletAddress: string) => {
     return this.pump.getWalletBalances(walletAddress);
   }
   
   /**
-   * Get transaction history for a wallet
+   * Get transaction history for a wallet (deprecated - use portfolio.getTransactionHistory)
    */
   getTransactionHistory = async (walletAddress: string, limit = 50) => {
     return this.pump.getTransactionHistory(walletAddress, limit);
+  }
+  
+  /**
+   * Get complete portfolio with all token holdings
+   */
+  getPortfolio = async (walletAddress: string) => {
+    return this.portfolio.getPortfolio(walletAddress);
+  }
+  
+  /**
+   * Get balance for a specific token
+   */
+  getTokenBalance = async (walletAddress: string, mintAddress: string) => {
+    return this.portfolio.getTokenBalance(walletAddress, mintAddress);
+  }
+  
+  /**
+   * Get SOL balance for a wallet
+   */
+  getSolBalance = async (walletAddress: string) => {
+    return this.portfolio.getSolBalance(walletAddress);
+  }
+  
+  /**
+   * Refresh portfolio after a trade
+   */
+  refreshAfterTrade = async (walletAddress: string, mintAddress: string) => {
+    return this.portfolio.refreshAfterTrade(walletAddress, mintAddress);
   }
   
   /**
@@ -178,4 +215,5 @@ export const api = apiService;
 // Also export individual services if needed
 export { pumpService };
 export { tokensService };
+export { portfolioService };
 export { apiClient };

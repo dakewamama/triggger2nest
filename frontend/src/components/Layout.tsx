@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { WalletMultiButton } from '../providers/WalletProvider';
+import { Wallet } from 'lucide-react';
 
 interface LayoutProps {
   children: ReactNode;
@@ -23,8 +24,9 @@ export default function Layout({ children }: LayoutProps) {
                   location.pathname === '/' ? 'text-neon-lime' : 'text-gray-400 hover:text-white'
                 }`}
               >
-                Tokens
+                Triggger
               </Link>
+              
               <Link 
                 to="/create" 
                 className={`font-bold transition-colors ${
@@ -33,7 +35,15 @@ export default function Layout({ children }: LayoutProps) {
               >
                 Create
               </Link>
-
+              <Link 
+                to="/portfolio" 
+                className={`font-bold transition-colors flex items-center gap-2 ${
+                  location.pathname === '/portfolio' ? 'text-neon-lime' : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <Wallet className="w-4 h-4" />
+                Portfolio
+              </Link>
             </div>
             
             {/* Wallet Button */}
