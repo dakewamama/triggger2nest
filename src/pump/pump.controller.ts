@@ -21,7 +21,7 @@ import { SellTokenDto } from './dto/sell-token.dto';
 import { Connection, Transaction, sendAndConfirmRawTransaction } from '@solana/web3.js';
 import { ConfigService } from '@nestjs/config';
 
-@Controller() // NO PREFIX - routes are already /pump/buy-token, /api/pump/create, etc.
+@Controller('pump')
 export class PumpController {
   private readonly logger = new Logger(PumpController.name);
   private connection: Connection;
@@ -38,17 +38,14 @@ export class PumpController {
     this.logger.log(`📡 Connected to RPC: ${rpcUrl}`);
   }
 
-  // ========================================
-  // MAIN PUMP ENDPOINTS (/pump/*)
-  // ========================================
 
-  @Get('pump/health')
+  @Get('health')
   async healthCheck() {
     this.logger.log('Health check endpoint hit');
     return this.pumpService.healthCheck();
   }
 
-  @Post('pump/create-token')
+  @Post('create-token')
   @UseInterceptors(FileInterceptor('image'))
   async createToken(
     @Body() createTokenDto: CreateTokenDto,
@@ -58,9 +55,9 @@ export class PumpController {
     return this.pumpService.createToken(createTokenDto, file);
   }
 
-  @Post('pump/buy-token')
+  @Post('buy-token')
   async buyToken(@Body() buyTokenDto: BuyTokenDto & { simulate?: boolean }) {
-    this.logger.log('🔵 BUY TOKEN endpoint hit');
+    this.logger.log('BUY TOKEN endpoint hit');
     this.logger.log(`Request: ${JSON.stringify({ 
       mint: buyTokenDto.mint?.slice(0, 8) + '...', 
       solAmount: buyTokenDto.solAmount,
@@ -69,7 +66,7 @@ export class PumpController {
     
     try {
       const result = await this.pumpService.buyToken(buyTokenDto);
-      this.logger.log(`Response: ${result.success ? '✅ SUCCESS' : '❌ FAILED'}`);
+      this.logger.log(`Response: ${result.success ? ':) SUCCESS' : ':( FAILED'}`);
       return result;
     } catch (error) {
       this.logger.error('Controller error:', error);
@@ -80,9 +77,9 @@ export class PumpController {
     }
   }
 
-  @Post('pump/sell-token')
+  @Post('sell-token')
   async sellToken(@Body() sellTokenDto: SellTokenDto & { simulate?: boolean }) {
-    this.logger.log('🔴 SELL TOKEN endpoint hit');
+    this.logger.log('SELL TOKEN endpoint hit');
     this.logger.log(`Request: ${JSON.stringify({ 
       mint: sellTokenDto.mint?.slice(0, 8) + '...', 
       amount: sellTokenDto.amount,
@@ -102,19 +99,19 @@ export class PumpController {
     }
   }
 
-  @Post('pump/simulate')
+  @Post('simulate')
   async simulateTransaction(@Body() body: { transaction: string }) {
     this.logger.log('Simulate endpoint hit');
     return this.pumpService.simulateTransaction(body.transaction);
   }
 
-  @Get('pump/token-info/:mintAddress')
+  @Get('token-info/:mintAddress')
   async getTokenInfo(@Param('mintAddress') mintAddress: string) {
     this.logger.log(`Get token info endpoint hit: ${mintAddress.slice(0, 8)}...`);
     return this.pumpService.getTokenInfo(mintAddress);
   }
 
-  @Get('pump/quote/:mint')
+  @Get('quote/:mint')
   async getQuote(
     @Param('mint') mint: string,
     @Query('amount') amount: number,
@@ -124,13 +121,13 @@ export class PumpController {
     return this.pumpService.getQuote(mint, Number(amount), action);
   }
 
-  @Get('pump/token-status/:mint')
+  @Get('token-status/:mint')
   async checkTokenStatus(@Param('mint') mint: string) {
     this.logger.log(`Check token status endpoint hit: ${mint.slice(0, 8)}...`);
     return this.pumpService.checkTokenStatus(mint);
   }
 
-  @Get('pump/wallet/:address/balances')
+  @Get('wallet/:address/balances')
   async getWalletBalances(@Param('address') address: string) {
     this.logger.log(`Get wallet balances endpoint hit: ${address.slice(0, 8)}...`);
     return {
@@ -143,7 +140,7 @@ export class PumpController {
     };
   }
 
-  @Get('pump/wallet/:address/transactions')
+  @Get('wallet/:address/transactions')
   async getWalletTransactions(
     @Param('address') address: string,
     @Query('limit') limit = 50,
@@ -155,20 +152,15 @@ export class PumpController {
     };
   }
 
-  @Post('pump/debug-accounts')
+  @Post('debug-accounts')
   async debugAccounts(@Body() body: { mint: string; buyer: string }) {
     this.logger.log(`Debug accounts endpoint hit: ${body.mint.slice(0, 8)}..., ${body.buyer.slice(0, 8)}...`);
     return this.pumpService.debugTokenAccounts(body.mint, body.buyer);
   }
 
-  // ========================================
-  // IDL-BASED ENDPOINTS (/api/pump/*)
-  // ========================================
 
-  /**
-   * Create a new token on pump.fun via IDL service
-   */
-  @Post('api/pump/create')
+  //Create a new token on pump.fun via IDL service
+  @Post('create-idl')
   async createTokenViaIdl(@Body() body: {
     name: string;
     symbol: string;
@@ -176,7 +168,7 @@ export class PumpController {
     creator: string;
   }) {
     try {
-      this.logger.log(`🎨 Creating token via IDL: ${body.symbol}`);
+      this.logger.log(`Creating token via IDL: ${body.symbol}`);
 
       // Validate input
       if (!body.name || !body.symbol || !body.creator) {
@@ -197,7 +189,7 @@ export class PumpController {
         throw new HttpException(result.error || 'Failed to create token', HttpStatus.INTERNAL_SERVER_ERROR);
       }
 
-      this.logger.log('✅ Token creation transaction built');
+      this.logger.log(':) Token creation transaction built');
       return {
         success: true,
         data: result.data,
@@ -213,9 +205,9 @@ export class PumpController {
     }
   }
 
-  /**
-   * Send a signed transaction to the network
-   */
+  
+   // Send a signed transaction to the network
+   
   @Post('api/pump/send-transaction')
   async sendTransaction(@Body() body: { transaction: string }) {
     try {
@@ -238,7 +230,7 @@ export class PumpController {
         }
       );
 
-      this.logger.log(`✅ Transaction sent: ${signature}`);
+      this.logger.log(`Transaction sent: ${signature}`);
 
       return {
         success: true,
@@ -247,7 +239,7 @@ export class PumpController {
         },
       };
     } catch (error: any) {
-      this.logger.error('❌ Failed to send transaction:', error);
+      this.logger.error('Failed to send transaction:', error);
 
       let errorMessage = 'Failed to send transaction';
 
@@ -263,9 +255,7 @@ export class PumpController {
     }
   }
 
-  /**
-   * Simulate a transaction via IDL service
-   */
+  //Simulate a transaction via IDL service
   @Post('api/pump/simulate')
   async simulateTransactionViaIdl(@Body() body: { transaction: string }) {
     try {
@@ -277,7 +267,7 @@ export class PumpController {
 
       const result = await this.pumpIdlService.simulateTransaction(body.transaction);
 
-      this.logger.log(`Simulation: ${result.willSucceed ? '✅ Will succeed' : '❌ Will fail'}`);
+      this.logger.log(`Simulation: ${result.willSucceed ? ':) Will succeed' : ':( Will fail'}`);
       
       return {
         success: true,
@@ -300,7 +290,7 @@ export class PumpController {
     slippage?: number;
   }) {
     try {
-      this.logger.log(`🔵 Buy via IDL: ${body.solAmount} SOL for ${body.mint.slice(0, 8)}...`);
+      this.logger.log(`Buy via IDL: ${body.solAmount} SOL for ${body.mint.slice(0, 8)}...`);
 
       // Validate input
       if (!body.mint || !body.buyer || !body.solAmount) {
@@ -325,7 +315,7 @@ export class PumpController {
         throw new HttpException(result.error || 'Failed to create buy transaction', HttpStatus.INTERNAL_SERVER_ERROR);
       }
 
-      this.logger.log('✅ Buy transaction built via IDL');
+      this.logger.log('Buy transaction built via IDL');
       return {
         success: true,
         data: result.data,

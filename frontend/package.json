@@ -10,6 +10,8 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@privy-io/react-auth": "^1.99.1",
+    "@privy-io/wagmi-connector": "^0.1.13",
     "@solana/web3.js": "^1.66.2",
     "@types/lodash": "^4.17.20",
     "axios": "^1.6.2",

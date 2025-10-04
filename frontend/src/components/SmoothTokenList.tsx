@@ -13,7 +13,8 @@ interface Token {
   price_change_24h?: number;
   volume_24h?: number;
   created_timestamp?: number;
-  isNew?: boolean; // Flag for newly added tokens
+  virtual_token_reserves?: number;
+  isNew?: boolean;
 }
 
 interface TokenListProps {
@@ -27,6 +28,14 @@ export default function SmoothTokenList({ category = 'trending' }: TokenListProp
   const [newTokenAlert, setNewTokenAlert] = useState(false);
   const lastUpdateRef = useRef<string[]>([]);
   const navigate = useNavigate();
+
+  const INITIAL_VIRTUAL_TOKEN_RESERVES = 1_073_000_000 * 1e6;
+  const REAL_TOKEN_RESERVES = 793_100_000 * 1e6;
+
+  const calculateBondingCurveProgress = (virtualTokenReserves?: number): number => {
+    if (!virtualTokenReserves) return 0;
+    return ((INITIAL_VIRTUAL_TOKEN_RESERVES - virtualTokenReserves) * 100) / REAL_TOKEN_RESERVES;
+  };
 
   const fetchTokens = async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -44,20 +53,16 @@ export default function SmoothTokenList({ category = 'trending' }: TokenListProp
           data = await api.getTrendingTokens(20);
       }
 
-      // Check for new tokens
       const currentMints = tokens.map(t => t.mint);
       const newMints = data.map((t: Token) => t.mint);
       const addedTokens = newMints.filter((mint: string) => !currentMints.includes(mint));
 
-      // Mark new tokens
       const updatedData = data.map((token: Token) => ({
         ...token,
         isNew: addedTokens.includes(token.mint)
       }));
 
-      // Smoothly update the list
       if (addedTokens.length > 0 && tokens.length > 0) {
-        // Animate new tokens
         setNewTokenAlert(true);
         setTimeout(() => setNewTokenAlert(false), 3000);
       }
@@ -74,7 +79,6 @@ export default function SmoothTokenList({ category = 'trending' }: TokenListProp
   useEffect(() => {
     fetchTokens();
 
-    // Auto-refresh every 10 seconds without showing loading
     const interval = autoRefresh 
       ? setInterval(() => fetchTokens(false), 10000) 
       : null;
@@ -138,7 +142,6 @@ export default function SmoothTokenList({ category = 'trending' }: TokenListProp
 
   return (
     <div className="bg-gray-800 rounded-lg p-6">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           {getCategoryIcon()}
@@ -169,78 +172,82 @@ export default function SmoothTokenList({ category = 'trending' }: TokenListProp
         </div>
       </div>
 
-      {/* Token List */}
       <div className="space-y-2">
-        {tokens.map((token, index) => (
-          <div
-            key={token.mint}
-            onClick={() => navigate(`/token/${token.mint}`)}
-            className={`
-              p-4 bg-gray-700/50 rounded-lg hover:bg-gray-700 cursor-pointer 
-              transition-all duration-300 transform
-              ${token.isNew ? 'animate-slideIn ring-2 ring-green-400' : ''}
-            `}
-            style={{
-              animationDelay: token.isNew ? `${index * 50}ms` : '0ms'
-            }}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="text-gray-500 text-sm w-6">
-                  {index + 1}
-                </div>
-                {token.image && (
-                  <img 
-                    src={token.image} 
-                    alt={token.symbol}
-                    className="w-10 h-10 rounded-full"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                )}
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-white">{token.symbol}</span>
-                    {token.isNew && (
-                      <Bell className="w-3 h-3 text-green-400 animate-bounce" />
-                    )}
+        {tokens.map((token, index) => {
+          const progress = calculateBondingCurveProgress(token.virtual_token_reserves);
+          
+          return (
+            <div
+              key={token.mint}
+              onClick={() => navigate(`/token/${token.mint}`)}
+              className={`
+                p-4 bg-gray-700/50 rounded-lg hover:bg-gray-700 cursor-pointer 
+                transition-all duration-300 transform
+                ${token.isNew ? 'animate-slideIn ring-2 ring-green-400' : ''}
+              `}
+              style={{
+                animationDelay: token.isNew ? `${index * 50}ms` : '0ms'
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="text-gray-500 text-sm w-6">
+                    {index + 1}
                   </div>
-                  <div className="text-sm text-gray-400">{token.name}</div>
+                  {token.image && (
+                    <img 
+                      src={token.image} 
+                      alt={token.symbol}
+                      className="w-10 h-10 rounded-full"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  )}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white">{token.symbol}</span>
+                      {token.isNew && (
+                        <Bell className="w-3 h-3 text-green-400 animate-bounce" />
+                      )}
+                    </div>
+                    <div className="text-sm text-gray-400">{token.name}</div>
+                  </div>
+                </div>
+                
+                <div className="text-right">
+                  <div className="text-white font-medium">
+                    {formatMarketCap(token.usd_market_cap)}
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    {formatPrice(token.price)}
+                  </div>
+                  <div className={`text-sm ${
+                    (token.price_change_24h || 0) >= 0 ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {token.price_change_24h ? `${token.price_change_24h > 0 ? '+' : ''}${token.price_change_24h.toFixed(2)}%` : 'New'}
+                  </div>
                 </div>
               </div>
               
-              <div className="text-right">
-                <div className="text-white font-medium">
-                  {formatMarketCap(token.usd_market_cap)}
+              <div className="mt-2">
+                <div className="w-full bg-gray-600 rounded-full h-1">
+                  <div
+                    className="bg-gradient-to-r from-green-400 to-yellow-400 h-1 rounded-full transition-all duration-500"
+                    style={{ 
+                      width: `${Math.min(progress, 100)}%` 
+                    }}
+                  />
                 </div>
-                <div className={`text-sm ${
-                  (token.price_change_24h || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                }`}>
-                  {token.price_change_24h ? `${token.price_change_24h > 0 ? '+' : ''}${token.price_change_24h.toFixed(2)}%` : 'New'}
+                <div className="text-xs text-gray-500 mt-1">
+                  {Math.min(progress, 100).toFixed(1)}% to graduation
                 </div>
               </div>
             </div>
-            
-            {/* Progress to graduation */}
-            <div className="mt-2">
-              <div className="w-full bg-gray-600 rounded-full h-1">
-                <div
-                  className="bg-gradient-to-r from-green-400 to-yellow-400 h-1 rounded-full transition-all duration-500"
-                  style={{ 
-                    width: `${Math.min(((token.usd_market_cap || 0) / 69000) * 100, 100)}%` 
-                  }}
-                />
-              </div>
-              <div className="text-xs text-gray-500 mt-1">
-                {((token.usd_market_cap || 0) / 69000 * 100).toFixed(1)}% to graduation
-              </div>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Add custom CSS for animations */}
       <style>{`
         @keyframes slideIn {
           from {

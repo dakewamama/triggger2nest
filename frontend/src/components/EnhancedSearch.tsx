@@ -21,7 +21,12 @@ export default function EnhancedSearch() {
   const searchRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  const GRADUATION_MARKET_CAP = 69000;
+  const INITIAL_VIRTUAL_TOKEN_RESERVES = 1_073_000_000 * 1e6;
+  const REAL_TOKEN_RESERVES = 793_100_000 * 1e6;
+
+  const calculateBondingCurveProgress = (virtualTokenReserves: number): number => {
+    return ((INITIAL_VIRTUAL_TOKEN_RESERVES - virtualTokenReserves) * 100) / REAL_TOKEN_RESERVES;
+  };
 
   useEffect(() => {
     const stored = localStorage.getItem('recentTokens');
@@ -42,12 +47,16 @@ export default function EnhancedSearch() {
   }, []);
 
   const addToRecent = (token: any) => {
+    const progress = token.virtual_token_reserves 
+      ? calculateBondingCurveProgress(token.virtual_token_reserves)
+      : 0;
+
     const recent: RecentToken = {
       mint: token.mint,
       symbol: token.symbol,
       name: token.name,
       marketCap: token.usd_market_cap || 0,
-      progress: ((token.usd_market_cap || 0) / GRADUATION_MARKET_CAP) * 100,
+      progress: Math.min(progress, 100),
       timestamp: Date.now()
     };
 
@@ -149,80 +158,73 @@ export default function EnhancedSearch() {
           ) : searchResults.length > 0 ? (
             <div className="p-2">
               <p className="px-3 py-2 text-xs text-gray-500 uppercase tracking-wide">Search Results</p>
-              {searchResults.map((token) => (
-                <button
-                  key={token.mint}
-                  onClick={() => selectToken(token)}
-                  className="w-full text-left px-3 py-3 hover:bg-gray-700 rounded transition-colors flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    {token.image && (
-                      <img src={token.image} alt={token.symbol} className="w-8 h-8 rounded-full" />
+              {searchResults.map((token) => {
+                const progress = token.virtual_token_reserves 
+                  ? calculateBondingCurveProgress(token.virtual_token_reserves)
+                  : 0;
+
+                return (
+                  <button
+                    key={token.mint}
+                    onClick={() => selectToken(token)}
+                    className="w-full text-left px-3 py-3 hover:bg-gray-700 rounded transition-colors flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      {token.image && (
+                        <img src={token.image} alt={token.symbol} className="w-8 h-8 rounded-full" />
+                      )}
+                      <div>
+                        <div className="font-medium text-white">
+                          {token.symbol}
+                          <span className="text-gray-400 text-sm ml-2">{token.name}</span>
+                        </div>
+                        <div className="text-xs text-gray-500 font-mono">
+                          {token.mint.slice(0, 8)}...{token.mint.slice(-6)}
+                        </div>
+                      </div>
+                    </div>
+                    {token.usd_market_cap && (
+                      <div className="text-right">
+                        <div className="text-sm text-neon-lime">
+                          {formatMarketCap(token.usd_market_cap)}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {Math.min(progress, 100).toFixed(1)}% to grad
+                        </div>
+                      </div>
                     )}
-                    <div>
-                      <div className="font-medium text-white">
-                        {token.symbol}
-                        <span className="text-gray-400 text-sm ml-2">{token.name}</span>
-                      </div>
-                      <div className="text-xs text-gray-500 font-mono">
-                        {token.mint.slice(0, 8)}...{token.mint.slice(-6)}
-                      </div>
-                    </div>
-                  </div>
-                  {token.usd_market_cap && (
-                    <div className="text-right">
-                      <div className="text-sm text-neon-lime">
-                        {formatMarketCap(token.usd_market_cap)}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {((token.usd_market_cap / GRADUATION_MARKET_CAP) * 100).toFixed(1)}% to grad
-                      </div>
-                    </div>
-                  )}
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           ) : query.length > 1 && !loading ? (
-            <div className="p-4 text-center text-gray-500">
-              No tokens found for "{query}"
+            <div className="p-4 text-center text-gray-400">
+              No results found
             </div>
-          ) : null}
-
-          {recentTokens.length > 0 && !query && (
-            <div className="p-2 border-t border-terminal-border">
+          ) : !query && recentTokens.length > 0 ? (
+            <div className="p-2">
               <p className="px-3 py-2 text-xs text-gray-500 uppercase tracking-wide flex items-center gap-2">
                 <Clock className="w-3 h-3" />
-                Recent Tokens
+                Recent Searches
               </p>
               {recentTokens.map((token) => (
                 <button
                   key={token.mint}
-                  onClick={() => selectToken(token)}
-                  className="w-full text-left px-3 py-3 hover:bg-gray-700 rounded transition-colors"
+                  onClick={() => navigate(`/token/${token.mint}`)}
+                  className="w-full text-left px-3 py-3 hover:bg-gray-700 rounded transition-colors flex items-center justify-between"
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-medium text-white">
-                        {token.symbol}
-                        <span className="text-gray-400 text-sm ml-2">{token.name}</span>
-                      </div>
-                      <div className="text-xs text-gray-500 font-mono">
-                        {token.mint.slice(0, 8)}...{token.mint.slice(-6)}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm text-neon-lime">
-                        {formatMarketCap(token.marketCap)}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {token.progress.toFixed(0)}% to grad
-                      </div>
-                    </div>
+                  <div>
+                    <div className="font-medium text-white">{token.symbol}</div>
+                    <div className="text-xs text-gray-500">{token.name}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-neon-lime">{formatMarketCap(token.marketCap)}</div>
+                    <div className="text-xs text-gray-500">{token.progress.toFixed(1)}% to grad</div>
                   </div>
                 </button>
               ))}
             </div>
-          )}
+          ) : null}
         </div>
       )}
     </div>

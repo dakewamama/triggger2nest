@@ -53,6 +53,16 @@ export interface MarketStats {
   }
 }
 
+export interface SearchResult {
+  data: Token[]
+  suggestions?: string[]
+  relatedTokens?: Token[]
+  searchType?: string
+  totalMatches?: number
+  query?: string
+  error?: string
+}
+
 export interface WalletBalance {
   address: string
   solBalance: number

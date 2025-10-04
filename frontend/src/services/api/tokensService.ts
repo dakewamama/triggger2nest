@@ -1,82 +1,10 @@
 import { apiClient } from './client';
-
-export interface PumpToken {
-  mint: string;
-  name: string;
-  symbol: string;
-  description: string;
-  image_uri?: string;
-  metadata_uri?: string;
-  twitter?: string;
-  telegram?: string;
-  bonding_curve: string;
-  associated_bonding_curve: string;
-  creator: string;
-  created_timestamp: number;
-  raydium_pool?: string;
-  complete: boolean;
-  virtual_sol_reserves: number;
-  virtual_token_reserves: number;
-  total_supply: number;
-  website?: string;
-  show_name: boolean;
-  king_of_the_hill_timestamp?: number;
-  market_cap: number;
-  reply_count: number;
-  last_reply: number;
-  nsfw: boolean;
-  market_id?: string;
-  inverted: boolean;
-  username?: string;
-  profile_image?: string;
-  usd_market_cap: number;
-  price?: number;
-  is_currently_live: boolean;
-  volume_24h?: number;
-  price_change_24h?: number;
-  last_trade_timestamp?: number;
-}
-
-export interface TokenTrade {
-  signature: string;
-  mint: string;
-  sol_amount: number;
-  token_amount: number;
-  is_buy: boolean;
-  user: string;
-  timestamp: number;
-  tx_index: number;
-  username?: string;
-  profile_image?: string;
-}
-
-export interface MarketStats {
-  totalMarketCap: number;
-  totalVolume24h: number;
-  activeTokens: number;
-  successfulGraduations: number;
-  totalTokens?: number;
-  last24Hours?: {
-    newTokens?: number;
-    volume?: number;
-    trades?: number;
-  };
-}
-
-export interface SearchResult {
-  data: PumpToken[];
-  suggestions?: string[];
-  relatedTokens?: PumpToken[];
-  searchType?: string;
-  totalMatches?: number;
-  query?: string;
-  error?: string;
-}
+import { Token, Trade, MarketStats, SearchResult } from '@/types';
 
 export interface DashboardData {
-  featuredTokens: PumpToken[];
-  trendingTokens: PumpToken[];
-  newTokens: PumpToken[];
+  featuredTokens: Token[];
+  trendingTokens: Token[];
+  newTokens: Token[];
   marketStats: MarketStats | null;
   summary: {
     totalFeatured: number;
@@ -87,9 +15,9 @@ export interface DashboardData {
 }
 
 class TokensService {
-  private readonly baseUrl = '/tokens'; // IMPORTANT: This must be /tokens
+  private readonly baseUrl = '/tokens';
 
-  async getFeaturedTokens(limit = 20, offset = 0): Promise<PumpToken[]> {
+  async getFeaturedTokens(limit = 20, offset = 0): Promise<Token[]> {
     try {
       console.log(`[TokensService] Fetching featured tokens - limit: ${limit}, offset: ${offset}`);
       
@@ -107,7 +35,7 @@ class TokensService {
     }
   }
 
-  async getTrendingTokens(limit = 50, offset = 0): Promise<PumpToken[]> {
+  async getTrendingTokens(limit = 50, offset = 0): Promise<Token[]> {
     try {
       console.log(`[TokensService] Fetching trending tokens - limit: ${limit}, offset: ${offset}`);
       
@@ -125,7 +53,7 @@ class TokensService {
     }
   }
 
-  async getNewTokens(limit = 50, offset = 0): Promise<PumpToken[]> {
+  async getNewTokens(limit = 50, offset = 0): Promise<Token[]> {
     try {
       console.log(`[TokensService] Fetching new tokens - limit: ${limit}, offset: ${offset}`);
       
@@ -143,15 +71,12 @@ class TokensService {
     }
   }
 
-  // This is the main fix
   async searchTokens(query: string, filters?: any): Promise<SearchResult> {
     try {
       console.log(`[TokensService] Searching tokens with query: "${query}"`);
       
-      // Build the correct URL - MUST be /tokens/search
       const url = `${this.baseUrl}/search`;
       
-      // IMPORTANT: Send query as a parameter
       const params = {
         q: query, 
         limit: filters?.limit || 50,
@@ -165,7 +90,6 @@ class TokensService {
       
       console.log('[TokensService] Search response:', data);
       
-      // Handle error response
       if (data?.success === false) {
         console.error('[TokensService] Search failed:', data.error);
         return { 
@@ -174,7 +98,6 @@ class TokensService {
         };
       }
       
-      // Return search results
       return {
         data: data?.data || [],
         totalMatches: data?.count || 0,
@@ -190,7 +113,7 @@ class TokensService {
     }
   }
 
-  async getTokenDetails(mintAddress: string): Promise<PumpToken | null> {
+  async getTokenDetails(mintAddress: string): Promise<Token | null> {
     try {
       console.log(`[TokensService] Fetching token details for: ${mintAddress}`);
       
@@ -207,7 +130,7 @@ class TokensService {
     }
   }
 
-  async getTokenTrades(mintAddress: string, limit = 50): Promise<TokenTrade[]> {
+  async getTokenTrades(mintAddress: string, limit = 50): Promise<Trade[]> {
     try {
       console.log(`[TokensService] Fetching trades for token: ${mintAddress}`);
       
@@ -243,7 +166,7 @@ class TokensService {
     }
   }
 
-  async getLatestTrades(limit = 20): Promise<TokenTrade[]> {
+  async getLatestTrades(limit = 20): Promise<Trade[]> {
     try {
       console.log('[TokensService] Fetching latest trades');
       
@@ -272,7 +195,6 @@ class TokensService {
         return data.data;
       }
       
-      // Fallback: fetch individually
       const [featured, trending, newTokens, marketStats] = await Promise.all([
         this.getFeaturedTokens(10),
         this.getTrendingTokens(20),
@@ -310,13 +232,12 @@ class TokensService {
     }
   }
 
-  private processTokens(tokens: any[]): PumpToken[] {
+  private processTokens(tokens: any[]): Token[] {
     return tokens.filter(token => token && token.mint).map(token => ({
       ...token,
       price: token.price || 0,
-      volume_24h: token.volume_24h || 0,
-      price_change_24h: token.price_change_24h || 0,
-      last_trade_timestamp: token.last_trade_timestamp || Date.now()
+      volume24h: token.volume_24h || 0,
+      change24h: token.price_change_24h || 0,
     }));
   }
 }

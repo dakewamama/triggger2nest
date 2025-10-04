@@ -48,8 +48,8 @@ export default function TokenTrades({ mint, symbol }: TokenTradesProps) {
   useEffect(() => {
     fetchTrades();
     
-    // Auto-refresh every 5 seconds if enabled
-    const interval = autoRefresh ? setInterval(fetchTrades, 5000) : null;
+    // Auto-refresh every half a second if enabled
+    const interval = autoRefresh ? setInterval(fetchTrades, 500) : null;
     
     return () => {
       if (interval) clearInterval(interval);

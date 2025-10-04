@@ -29,7 +29,7 @@ export interface PumpFunToken {
   username?: string;
   profile_image?: string;
   usd_market_cap: number;
-  price?: number; 
+  price?: number;
 }
 
 export interface TokenHolding {
