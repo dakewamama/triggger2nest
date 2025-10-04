@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TrendingUp, RefreshCw, Clock, Twitter, Globe } from 'lucide-react';
-import api from '@/services/api';
+import api from '@/services';
 
 interface Token {
   mint: string;

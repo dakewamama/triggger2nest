@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Search, X, TrendingUp, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { tokensService } from '@/services/api/tokensService';
+import { tokensService } from '@/services/tokensService';
 import debounce from 'lodash/debounce';
 
 interface SearchResult {

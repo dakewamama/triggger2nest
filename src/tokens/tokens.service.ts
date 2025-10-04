@@ -424,6 +424,39 @@ export class TokensService {
     } catch (error) {
       this.logger.error('Failed to fetch latest trades:', error.message);
       return { data: [] };
+   
     }
   }
+  async getSolPrice(): Promise<{ data: { price: number; timestamp: number } }> {
+  try {
+    this.logger.log('Fetching SOL price from CoinGecko');
+    
+    const response = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
+      params: {
+        ids: 'solana',
+        vs_currencies: 'usd'
+      },
+      timeout: 5000
+    });
+    
+    const price = response.data?.solana?.usd || 0;
+    
+    this.logger.log(`SOL price: $${price}`);
+    
+    return {
+      data: {
+        price,
+        timestamp: Date.now()
+      }
+    };
+  } catch (error) {
+    this.logger.error('Failed to fetch SOL price:', error.message);
+    return {
+      data: {
+        price: 140,
+        timestamp: Date.now()
+      }
+     };
+   }
+ }
 }

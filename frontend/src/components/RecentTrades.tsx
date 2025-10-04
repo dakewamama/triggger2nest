@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { api } from '../services/api'
+import { api } from '../services'
 import { Activity, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 
 interface Trade {

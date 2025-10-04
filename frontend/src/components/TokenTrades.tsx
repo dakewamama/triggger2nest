@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import api from '@/services/api';
+import api from '@/services';
 import { ArrowUpRight, ArrowDownRight, ExternalLink, RefreshCw } from 'lucide-react';
 import { formatAddress } from '../utils/format';
 

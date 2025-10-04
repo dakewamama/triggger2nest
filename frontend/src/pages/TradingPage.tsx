@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { api } from '../services/api'
+import { api } from '../services'
 import TokenCard from '../components/TokenCard'
 import { Activity, TrendingUp, Zap } from 'lucide-react'
 import RecentTrades from '../components/RecentTrades'

@@ -4,7 +4,7 @@ import { Upload, AlertCircle, Loader2, CheckCircle } from 'lucide-react';
 import { useWallet } from '../providers/WalletProvider';
 import { Connection, Transaction } from '@solana/web3.js';
 import { toast } from 'react-hot-toast';
-import { pumpService } from '../services/api';
+import { pumpService } from '../services';
 
 // Initialize Solana connection (use your RPC endpoint)
 const connection = new Connection(
@@ -198,7 +198,7 @@ export default function CreateTokenPage() {
               <li>Fair launch - no presale or team allocation</li>
             </ul>
             <p className="mt-2 text-yellow-400">
-              🚀 For local testing, metadata is stored as data URI (no IPFS needed)
+              For local testing, metadata is stored as data URI (no IPFS needed)
             </p>
           </div>
         </div>

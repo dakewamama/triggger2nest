@@ -520,7 +520,7 @@ export class TokensController {
   @Get('debug/search-test')
   async testSearch(@Query('q') query: string = 'test') {
     try {
-      this.logger.log(`========== SEARCH DIAGNOSTIC ==========`);
+      this.logger.log('Running search diagnostic');
       this.logger.log(`Testing search for: "${query}"`);
       
       // First, fetch some tokens to see what's available
@@ -582,7 +582,7 @@ export class TokensController {
         }
       };
       
-      this.logger.log(`Diagnostic complete:`, JSON.stringify(diagnostic, null, 2));
+      this.logger.log('Diagnostic complete');
       
       return {
         success: true,

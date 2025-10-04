@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useWallet } from '../providers/WalletProvider';
-import { portfolioService, Portfolio, PortfolioToken } from '../services/api/portfolioService';
+import { portfolioService, Portfolio, PortfolioToken } from '../services/portfolioService';
 import { Wallet, TrendingUp, TrendingDown, RefreshCw, DollarSign } from 'lucide-react';
 import { Link } from 'react-router-dom';
 

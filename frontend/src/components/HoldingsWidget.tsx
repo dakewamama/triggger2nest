@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useWallet } from '../providers/WalletProvider';
-import { portfolioService } from '../services/api/portfolioService';
+import { portfolioService } from '../services/portfolioService';
 import { Wallet, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react';
 
 interface HoldingsWidgetProps {

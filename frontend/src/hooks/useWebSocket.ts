@@ -1,49 +1,27 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react';
+import { websocketService } from './websocket/websocketService';
 
-export function useWebSocket(url: string) {
-  const [ws, setWs] = useState<WebSocket | null>(null)
-  const [isConnected, setIsConnected] = useState(false)
-  const [lastMessage, setLastMessage] = useState<any>(null)
-
-  const connect = useCallback(() => {
-    const websocket = new WebSocket(url)
-
-    websocket.onopen = () => {
-      console.log('WebSocket connected')
-      setIsConnected(true)
-    }
-
-    websocket.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      setLastMessage(data)
-    }
-
-    websocket.onclose = () => {
-      console.log('WebSocket disconnected')
-      setIsConnected(false)
-      // Reconnect after 3 seconds
-      setTimeout(connect, 3000)
-    }
-
-    websocket.onerror = (error) => {
-      console.error('WebSocket error:', error)
-    }
-
-    setWs(websocket)
-  }, [url])
+export function useWebSocket() {
+  const [isConnected, setIsConnected] = useState(false);
+  const [lastMessage, setLastMessage] = useState<any>(null);
 
   useEffect(() => {
-    connect()
+    const handleConnected = (data: any) => setIsConnected(data.connected);
+    const handleMessage = (data: any) => setLastMessage(data);
+
+    websocketService.on('connected', handleConnected);
+    websocketService.on('message', handleMessage);
+    websocketService.connect();
+
     return () => {
-      ws?.close()
-    }
-  }, [])
+      websocketService.off('connected', handleConnected);
+      websocketService.off('message', handleMessage);
+    };
+  }, []);
 
   const sendMessage = useCallback((message: any) => {
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(message))
-    }
-  }, [ws])
+    websocketService.send(message);
+  }, []);
 
-  return { isConnected, lastMessage, sendMessage }
+  return { isConnected, lastMessage, sendMessage };
 }

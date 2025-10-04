@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useWallet, useConnection } from '../providers/WalletProvider';
-import api from '@/services/api';
-import { portfolioService } from '../services/api/portfolioService';
+import api from '@/services';
+import { portfolioService } from '../services/portfolioService';
 import { toast } from 'sonner';
 import { Transaction, VersionedTransaction } from '@solana/web3.js';
 import HoldingsWidget from './HoldingsWidget';
