@@ -3,35 +3,45 @@ import { tokensService } from './tokensService';
 import { portfolioService } from './portfolioService';
 import { apiClient } from './client';
 
-// Export types from pumpService
 export type {
+  // Token types
+  Token,
+  PumpToken,
+  
+  // Trade types
+  Trade,
+  TokenTrade,
+  
+  // Market & stats
+  MarketStats,
+  
+  // Search
+  SearchResult,
+  
+  // Wallet & Portfolio
+  WalletBalance,
+  PortfolioToken,
+  Portfolio,
+  Transaction,
+  
+  // Pump.fun API
   CreateTokenDto,
   BuyTokenDto,
   SellTokenDto,
   TokenResponse,
   QuoteResponse,
-  WalletBalance,
   BuyTokenParams,
-  SellTokenParams
-} from './pumpService';
+  SellTokenParams,
+  
+  // Dashboard
+  DashboardData,
+  
+  // API Response
+  ApiResponse,
+  PaginatedResponse,
+} from '../types';
 
-// Export types from tokensService
-export type {
-  PumpToken,
-  TokenTrade,
-  MarketStats,
-  SearchResult,
-  DashboardData
-} from './tokensService';
 
-// Export types from portfolioService
-export type {
-  PortfolioToken,
-  Portfolio,
-  Transaction
-} from './portfolioService';
-
-// ApiService class with arrow functions for better binding
 export class ApiService {
   pump = pumpService;
   tokens = tokensService;
@@ -99,14 +109,14 @@ export class ApiService {
   }
   
   /**
-   * Get wallet balances (deprecated - use portfolio.getPortfolio)
+   * Get wallet balances 
    */
   getWalletBalances = async (walletAddress: string) => {
     return this.pump.getWalletBalances(walletAddress);
   }
   
   /**
-   * Get transaction history for a wallet (deprecated - use portfolio.getTransactionHistory)
+   * Get transaction history for a wallet 
    */
   getTransactionHistory = async (walletAddress: string, limit = 50) => {
     return this.pump.getTransactionHistory(walletAddress, limit);
@@ -203,6 +213,7 @@ export class ApiService {
     return this.tokens.getDashboardData();
   }
 }
+
 
 // Create singleton instance
 const apiService = new ApiService();

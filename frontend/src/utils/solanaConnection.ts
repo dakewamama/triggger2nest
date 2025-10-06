@@ -1,5 +1,5 @@
 // Custom Solana connection that avoids WebSocket issues
-import { Connection, PublicKey, Transaction, clusterApiUrl } from '@solana/web3.js';
+import { Connection, PublicKey, Transaction } from '@solana/web3.js';
 
 // Use HTTP-only connection to avoid WebSocket issues
 export const createConnection = () => {

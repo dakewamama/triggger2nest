@@ -1,19 +1,20 @@
 import { useState, useEffect } from 'react'
 import { api } from '../services'
+import type { Token } from '../types'
 import TokenCard from '../components/TokenCard'
 import { Activity, TrendingUp, Zap } from 'lucide-react'
 import RecentTrades from '../components/RecentTrades'
 
 export default function TradingPage() {
-  const [activeTokens, setActiveTokens] = useState<any[]>([])
-  const [topGainers, setTopGainers] = useState<any[]>([])
-  const [topLosers, setTopLosers] = useState<any[]>([])
-  const [newListings, setNewListings] = useState<any[]>([])
+  const [activeTokens, setActiveTokens] = useState<Token[]>([])
+  const [topGainers, setTopGainers] = useState<Token[]>([])
+  const [topLosers, setTopLosers] = useState<Token[]>([])
+  const [newListings, setNewListings] = useState<Token[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadTradingData()
-    const interval = setInterval(loadTradingData, 30000) // Refresh every 30s
+    const interval = setInterval(loadTradingData, 30000)
     return () => clearInterval(interval)
   }, [])
 
@@ -24,7 +25,6 @@ export default function TradingPage() {
         api.getNewTokens(10)
       ])
 
-      // Sort for gainers and losers
       const sorted = [...trending].sort((a, b) => (b.price_change_24h || 0) - (a.price_change_24h || 0))
       setTopGainers(sorted.slice(0, 5))
       setTopLosers(sorted.slice(-5).reverse())
@@ -46,9 +46,7 @@ export default function TradingPage() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-      {/* Left Sidebar - Market Overview */}
       <div className="lg:col-span-1 space-y-6">
-        {/* Top Gainers */}
         <div className="terminal-card">
           <h3 className="font-display font-bold flex items-center gap-2 mb-4">
             <TrendingUp className="text-profit" size={20} />
@@ -68,7 +66,6 @@ export default function TradingPage() {
           </div>
         </div>
 
-        {/* Top Losers */}
         <div className="terminal-card">
           <h3 className="font-display font-bold flex items-center gap-2 mb-4">
             <TrendingUp className="text-loss rotate-180" size={20} />
@@ -89,7 +86,6 @@ export default function TradingPage() {
         </div>
       </div>
 
-      {/* Main Content - Active Tokens */}
       <div className="lg:col-span-2 space-y-6">
         <div className="terminal-card">
           <h2 className="font-display text-xl font-bold flex items-center gap-2 mb-6">
@@ -98,15 +94,13 @@ export default function TradingPage() {
           </h2>
           <div className="space-y-4">
             {activeTokens.map((token) => (
-              <TokenCard key={token.mint} {...token} />
+              <TokenCard key={token.mint} token={token} />
             ))}
           </div>
         </div>
       </div>
 
-      {/* Right Sidebar - New Listings & Recent Trades */}
       <div className="lg:col-span-1 space-y-6">
-        {/* New Listings */}
         <div className="terminal-card">
           <h3 className="font-display font-bold flex items-center gap-2 mb-4">
             <Zap className="text-neon-gold" size={20} />
@@ -125,7 +119,6 @@ export default function TradingPage() {
           </div>
         </div>
 
-        {/* Recent Trades */}
         <RecentTrades />
       </div>
     </div>

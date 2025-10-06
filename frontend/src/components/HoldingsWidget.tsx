@@ -16,7 +16,7 @@ export default function HoldingsWidget({
 }: HoldingsWidgetProps) {
   const { publicKey, connected } = useWallet();
   const [balance, setBalance] = useState<number>(0);
-  const [value, setValue] = useState<number>(0);
+  const [value] = useState<number>(0);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {

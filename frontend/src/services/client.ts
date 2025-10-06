@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { AxiosInstance, AxiosError } from 'axios';
+import type { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 interface ErrorResponse {
   error?: string;
@@ -12,61 +12,64 @@ class ApiClient {
   
   constructor() {
     this.client = axios.create({
-      baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+      baseURL: '',
       timeout: 30000,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+      },
     });
     
-    this.setupInterceptors();
-  }
-
-  private setupInterceptors() {
     this.client.interceptors.request.use(
-      (config) => {
-        if (import.meta.env.DEV) {
-          console.log(`${config.method?.toUpperCase()} ${config.url}`);
-        }
-        return config;
-      },
+      (config: InternalAxiosRequestConfig) => config,
       (error) => Promise.reject(error)
     );
     
     this.client.interceptors.response.use(
       (response) => response,
       (error: AxiosError<ErrorResponse>) => {
-        const message = this.handleError(error);
-        throw new Error(message);
+        if (error.code === 'ERR_NETWORK') {
+          throw new Error('Cannot connect to server. Please check your network or backend service.');
+        }
+
+        if (error.response?.status === 404) {
+          throw new Error('API endpoint not found.');
+        }
+
+        if (error.response?.status === 500) {
+          throw new Error('Internal server error. Please check backend logs.');
+        }
+
+        if (error.response?.status === 400) {
+          throw new Error(error.response.data?.message || error.response.data?.error || 'Bad request');
+        }
+
+        throw error;
       }
     );
-  }
-
-  private handleError(error: AxiosError<ErrorResponse>): string {
-    if (error.code === 'ERR_NETWORK') {
-      return 'Cannot connect to backend. Ensure server is running on port 8000.';
-    }
-
-    if (error.response) {
-      const { status, data } = error.response;
-      
-      if (status === 404) {
-        return `Endpoint not found: ${error.config?.method} ${error.config?.url}`;
-      }
-      
-      if (status === 500) {
-        return data?.error || 'Internal server error';
-      }
-      
-      if (status === 400) {
-        return data?.message || data?.error || 'Bad request';
-      }
-    }
-
-    return error.message || 'Request failed';
   }
   
   get api() {
     return this.client;
   }
+
+  async testConnection(): Promise<boolean> {
+    try {
+      await this.client.get('/health');
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
 
 export const apiClient = new ApiClient();
+
+if (import.meta.env.DEV) {
+  setTimeout(() => {
+    apiClient.testConnection().then((connected) => {
+      if (!connected) {
+        console.warn('Cannot connect to backend. Ensure it is running on http://localhost:8000');
+      }
+    });
+  }, 1000);
+}
