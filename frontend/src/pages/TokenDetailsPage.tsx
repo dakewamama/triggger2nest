@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import api from '@/services'
-import type { Token } from '@/types'
 import TradingPanel from '@/components/TradingPanel'
 import TokenTrades from '@/components/TokenTrades'
 import { Copy, Twitter, Globe } from 'lucide-react'
@@ -10,7 +9,7 @@ import { formatAddress, formatNumber, formatPrice } from '@/utils/format'
 
 export default function TokenDetailsPage() {
   const { mint } = useParams<{ mint: string }>()
-  const [token, setToken] = useState<Token | null>(null)
+  const [token, setToken] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -60,6 +59,7 @@ export default function TokenDetailsPage() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-6">
+        {/* Token Info */}
         <div className="bg-gray-800 rounded-lg p-6">
           <div className="flex items-start justify-between mb-6">
             <div className="flex items-center space-x-4">
@@ -137,15 +137,18 @@ export default function TokenDetailsPage() {
           </div>
         </div>
 
+        {/* Trading Panel - Mobile Only (order-2 on mobile, hidden on desktop) */}
         <div className="lg:hidden order-2">
           <TradingPanel token={token} />
         </div>
 
+        {/* Trades (order-3 on mobile) */}
         <div className="order-3">
           <TokenTrades mint={mint!} />
         </div>
       </div>
 
+      {/* Trading Panel - Desktop Only (sticky on right side) */}
       <div className="hidden lg:block lg:sticky lg:top-24">
         <TradingPanel token={token} />
       </div>
