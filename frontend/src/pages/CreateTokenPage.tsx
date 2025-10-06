@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, AlertCircle, Loader2, CheckCircle } from 'lucide-react';
+import { Upload,  Loader2, CheckCircle } from 'lucide-react';
 import { useWallet } from '../providers/WalletProvider';
 import { Connection, Transaction } from '@solana/web3.js';
 import { toast } from 'react-hot-toast';

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, Clock, TrendingUp, X } from 'lucide-react';
+import { Search, Clock, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '@/services';
 
